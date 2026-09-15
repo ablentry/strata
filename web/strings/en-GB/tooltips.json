@@ -1,7 +1,7 @@
 {
   "app.commands": "Commands",
   "app.settings": "Messages, appearance and other preferences",
-  "app.switch_theme": "Switch theme",
+  "app.switch_theme": "Choose a theme",
   "app.version": "{label} — the version that produced this examination",
   "app.version_stale": "Strata's files have changed since it was started. This page is newer than the engine answering it, so newer features may not work until Strata is restarted.",
   "app.who_work_recorded": "Who this work is recorded as",
