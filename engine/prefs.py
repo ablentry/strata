@@ -6,7 +6,7 @@ import tempfile
 import threading
 
 ALLOWED = {
-    "theme":        ("dark", "light"),
+    "theme":        ("dark", "light", "midnight", "sepia", "contrast", "paper"),
     "tree_width":   (160, 640),
     "inspect_width": (200, 720),
     "preview_split": (0, 100),

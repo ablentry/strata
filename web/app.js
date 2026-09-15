@@ -8430,13 +8430,22 @@ function savePref(key, value) {
   }, 400);
 }
 
+const THEMES = ['dark', 'light', 'midnight', 'sepia', 'contrast', 'paper'];
+
+function toggleTheme() {
+  applyTheme(['light', 'paper'].includes(document.documentElement.dataset.theme)
+    ? 'dark' : 'light');
+}
+
 function applyTheme(name, { save = true } = {}) {
-  const theme = name === 'light' ? 'light' : 'dark';
+  const theme = THEMES.includes(name) ? name : 'dark';
   document.documentElement.dataset.theme = theme;
   const btn = $('#btn-theme');
   if (btn) {
-    btn.textContent = theme === 'light' ? 'Dark' : 'Light';
-    btn.title = `Switch to the ${theme === 'light' ? 'dark' : 'light'} theme`;
+    const toLight = !['light', 'paper'].includes(theme);
+    btn.textContent = txt(toLight ? 'ui.settings.theme_light'
+                                  : 'ui.settings.theme_dark');
+    btn.title = `Switch to the ${toLight ? 'light' : 'dark'} theme`;
   }
   hex.draw();
   core.draw();
@@ -8636,11 +8645,11 @@ function commands() {
 
   out.push({
     title: `Switch to the ${
-      document.documentElement.dataset.theme === 'light' ? 'dark' : 'light'
+      ['light', 'paper'].includes(document.documentElement.dataset.theme)
+        ? 'dark' : 'light'
     } theme`,
     keys: txt('messages.theme_dark_light_colour_color_appearance_contrast'),
-    run: () => applyTheme(
-      document.documentElement.dataset.theme === 'light' ? 'dark' : 'light'),
+    run: toggleTheme,
   });
 
   const has = sel => { const el = $(sel); return el && !el.hidden && !el.disabled; };
@@ -8922,8 +8931,7 @@ $('#dlg-who')?.addEventListener('close', () => {
   const n = $('#who-input').value.trim();
   if (n) setWho(n);
 });
-$('#btn-theme').addEventListener('click', () => applyTheme(
-  document.documentElement.dataset.theme === 'light' ? 'dark' : 'light'));
+$('#btn-theme').addEventListener('click', toggleTheme);
 $('#btn-settings')?.addEventListener('click', () => settingsDialog());
 $('#btn-palette').addEventListener('click', openPalette);
 $('#btn-split').addEventListener('click', () => toggleSplit());
