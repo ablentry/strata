@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Strata</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <span class="wordmark">STRATA</span>
+    <span class="version" id="app-version" title=""></span>
+  </div>
+  <div class="evidence" id="evidence-bar">
+    <button class="ghost" id="btn-open" data-i18n="ui.app.open"></button>
+    <button class="ghost" id="btn-case" data-i18n="ui.app.case"></button>
+  </div>
+  <div class="bar-right">
+    <span class="integrity" id="integrity" hidden></span>
+    <button class="ghost" id="btn-report" hidden data-i18n="ui.app.report"></button>
+    <button class="ghost" id="btn-audit" hidden data-i18n="ui.app.audit"></button>
+    <button class="ghost" id="btn-who" data-i18n-title="tooltips.app.who_work_recorded">
+      <span id="who-name" data-i18n="ui.app.who_name"></span></button>
+    <button class="ghost" id="btn-theme" data-i18n-title="tooltips.app.switch_theme" data-i18n="ui.app.theme"></button>
+    <button class="ghost" id="btn-settings" data-i18n-title="tooltips.app.settings"
+            data-i18n="ui.app.settings"></button>
+    <button class="ghost" id="btn-palette"
+            data-i18n-title="tooltips.app.commands" data-i18n="ui.app.palette"></button>
+  </div>
+</header>
+
+<nav class="modules" id="modules" role="tablist" data-i18n-aria="tooltips.triage.modules">
+  <button class="tab" data-view="cases" data-no-viewer role="tab" data-i18n="ui.app.cases"></button>
+  <button class="tab is-on" data-view="sources" role="tab" data-i18n="ui.app.sources"></button>
+  <button class="tab" data-view="triage" data-no-viewer role="tab" data-i18n="ui.structure.triage"></button>
+  <button class="tab" data-view="carve" role="tab" data-i18n="ui.triage.carved"></button>
+  <button class="tab" data-view="find" role="tab" data-i18n="ui.carve.search"></button>
+  <button class="tab" data-view="time" data-no-viewer role="tab" data-i18n="ui.find.timeline"></button>
+  <button class="tab" data-view="marks" role="tab" data-i18n="ui.time.marks"></button>
+  <button class="tab" data-view="tags" role="tab" data-i18n="ui.marks.tagged"></button>
+  <button class="tab" data-view="hash" role="tab" data-i18n="ui.tags.hashes"></button>
+  <button class="tab" data-view="attack" data-no-viewer role="tab" data-i18n="ui.hash.attack"></button>
+</nav>
+
+<main class="workspace" id="workspace">
+
+  <section class="panel panel-tree" id="panel-tree">
+
+    <div class="view" data-view="cases">
+      <div class="controls">
+        <button class="solid" id="btn-new-case" data-i18n="ui.cases.new"></button>
+        <button class="ghost" id="btn-open-case" data-i18n="ui.cases.open"></button>
+        <button class="ghost" id="btn-case-add" data-i18n="ui.cases.add_evidence"></button>
+        <button class="ghost" id="btn-close-case" data-i18n="ui.cases.close"></button>
+      </div>
+      <div class="view-main">
+        <div id="cases-results" class="results"></div>
+      </div>
+    </div>
+
+    <div class="view is-on" data-view="sources">
+      <div id="tree" class="tree"></div>
+    </div>
+
+    <div class="view" data-view="triage">
+      <div class="controls">
+        <button class="solid" id="btn-triage" data-i18n="ui.tree.triage"></button>
+        <button class="ghost" id="btn-picker" data-i18n="ui.tree.picker"></button>
+        <button class="ghost" id="btn-filetypes" data-i18n="ui.tree.filetypes"></button>
+        <button class="ghost" id="btn-registry" data-i18n="ui.tree.registry"></button>
+        <label class="check" data-i18n-title="tooltips.tree.check_every_open_exhibit_rather_than">
+          <input type="checkbox" id="ft-all"><span data-i18n="ui.tree.all_exhibits"></span>
+        </label>
+        <label class="row">
+          <span data-i18n="ui.tree.artefacts"></span>
+          <select id="art-scope"></select>
+        </label>
+        <div class="dv-modes">
+          <button class="dv-mode is-on" data-art="recyclebin" data-i18n="ui.tree.recycle_bin"></button>
+          <button class="dv-mode" data-art="lnk" data-i18n="ui.tree.shortcuts"></button>
+          <button class="dv-mode" data-art="browser" data-i18n="ui.tree.browsing"></button>
+          <button class="dv-mode" data-art="appcompat" data-i18n="ui.tree.programs"></button>
+          <button class="dv-mode" data-art="prefetch" data-i18n="ui.tree.execution"></button>
+          <button class="dv-mode" data-art="usn" data-i18n="ui.tree.journal"></button>
+          <button class="dv-mode" data-art="shellbags" data-i18n="ui.tree.folders"></button>
+          <button class="dv-mode" data-art="mail" data-i18n="ui.tree.mail"></button>
+          <button class="dv-mode" data-art="leveldb" data-i18n="ui.tree.leveldb"></button>
+          <button class="dv-mode" data-art="vss" data-i18n="ui.tree.shadow_copies"></button>
+          <button class="dv-mode" data-art="wallets" data-i18n="ui.tree.crypto"></button>
+        </div>
+        <button class="solid" id="btn-artifacts" data-i18n="ui.tree.artifacts"></button>
+      </div>
+      <div id="art-tree" class="art-tree"></div>
+      <div class="view-main">
+        <div id="triage-results" class="results"></div>
+        <div id="art-results" class="results" hidden></div>
+      </div>
+    </div>
+
+    <div class="view" data-view="carve">
+      <div class="controls">
+        <label class="row">
+          <span data-i18n="ui.tree.scan"></span>
+          <select id="carve-scope"></select>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="carve-unalloc" checked>
+          <span data-i18n="ui.tree.unallocated_space_only"></span>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="carve-aligned" checked>
+          <span data-i18n="ui.tree.cluster_aligned"></span>
+        </label>
+        <details class="carve-pick" id="carve-pick" open>
+          <summary>
+            <span data-i18n="ui.carve.file_types"></span>
+            <span class="carve-pick-n" id="carve-pick-n"></span>
+          </summary>
+          <div class="carve-pick-all">
+            <button type="button" class="linkish" id="carve-all" data-i18n="ui.carve.all"></button>
+            <button type="button" class="linkish" id="carve-none" data-i18n="ui.carve.none"></button>
+          </div>
+          <div id="carve-types" class="carve-types"></div>
+          <div class="carve-custom-head">
+            <span data-i18n="ui.carve.custom"></span>
+            <button type="button" class="linkish" id="carve-add-sig" data-i18n="ui.carve.add_signature"></button>
+          </div>
+          <div id="carve-custom" class="carve-custom"></div>
+        </details>
+        <button class="solid" id="btn-carve" data-i18n="ui.tree.carve"></button>
+      </div>
+      <div class="view-main">
+      <div id="carve-results" class="results"></div>
+      </div>
+    </div>
+
+    <div class="view" data-view="find">
+      <div class="controls">
+        <label class="row">
+          <span data-i18n="ui.tree.in"></span>
+          <select id="find-scope"></select>
+        </label>
+        <input type="text" id="find-terms" data-i18n-placeholder="tooltips.tree.terms_comma_separated"
+               autocomplete="off" spellcheck="false">
+        <label class="row">
+          <span data-i18n="ui.tree.look"></span>
+          <select id="find-mode">
+            <option value="media" data-i18n="ui.tree.raw_media_every_byte_incl_unallocated"></option>
+            <option value="both" selected data-i18n="ui.tree.files_names_contents"></option>
+            <option value="name" data-i18n="ui.tree.files_names_only"></option>
+            <option value="content" data-i18n="ui.tree.files_contents_only"></option>
+            <option value="indexed" data-i18n="ui.tree.index_instant_needs_building_first"></option>
+          </select>
+        </label>
+        <div class="index-bar" id="index-bar">
+          <span id="index-state" data-i18n="ui.tree.index_state"></span>
+          <button class="ghost" id="btn-index"
+                  data-i18n-title="tooltips.tree.every_partition_plus_unallocated_space_gaps" data-i18n="ui.tree.index"></button>
+          <button class="ghost" id="btn-index-clear" hidden data-i18n="ui.tree.index_clear"></button>
+        </div>
+        <div class="encodings">
+          <label class="check"><input type="checkbox" id="enc-ascii" checked><span data-i18n="ui.tree.ascii"></span></label>
+          <label class="check"><input type="checkbox" id="enc-u16" checked><span data-i18n="ui.tree.utf_16le"></span></label>
+          <label class="check"><input type="checkbox" id="find-regex"><span data-i18n="ui.tree.regex"></span></label>
+          <label class="check"><input type="checkbox" id="find-case"><span data-i18n="ui.tree.match_case"></span></label>
+        </div>
+        <details class="filters" id="find-filters">
+          <summary data-i18n="ui.tree.filters"></summary>
+          <label class="row"><span data-i18n="ui.tree.ext"></span>
+            <input type="text" id="f-ext" data-i18n-placeholder="tooltips.tree.pdf_docx_jpg"></label>
+          <label class="row"><span data-i18n="ui.tree.size"></span>
+            <span class="pair">
+              <input type="text" id="f-min" data-i18n-placeholder="tooltips.tree.min">
+              <input type="text" id="f-max" data-i18n-placeholder="tooltips.tree.max">
+            </span></label>
+          <label class="row"><span data-i18n="ui.tree.modified"></span>
+            <span class="pair">
+              <input type="date" id="f-mod-after">
+              <input type="date" id="f-mod-before">
+            </span></label>
+          <div class="encodings">
+            <label class="check"><input type="checkbox" id="f-deleted"><span data-i18n="ui.tree.deleted_only"></span></label>
+            <label class="check"><input type="checkbox" id="f-files" checked><span data-i18n="ui.tree.files_only"></span></label>
+          </div>
+          <label class="row" data-i18n-title="tooltips.tree.how_much_each_file_content_search">
+            <span data-i18n="ui.tree.read"></span>
+            <select id="f-scan">
+              <option value="1048576" data-i18n="ui.tree.first_1_mb_each_file"></option>
+              <option value="16777216" data-i18n="ui.tree.first_16_mb"></option>
+              <option value="67108864" selected data-i18n="ui.tree.first_64_mb"></option>
+              <option value="full" data-i18n="ui.tree.whole_files_no_limit"></option>
+            </select>
+          </label>
+        </details>
+        <button class="solid" id="btn-find" data-i18n="ui.tree.find"></button>
+        <details class="filters" id="saved-wrap">
+          <summary>Saved searches <span id="saved-count"></span></summary>
+          <div id="saved-list" class="saved-list"></div>
+        </details>
+      </div>
+      <div class="view-main">
+      <div class="results-actions" id="find-actions" hidden>
+        <button class="ghost" id="btn-save-search" data-i18n="ui.tree.save_search"></button>
+      </div>
+      <div id="find-results" class="results"></div>
+      </div>
+    </div>
+
+    <div class="view" data-view="time">
+      <div class="controls">
+        <label class="row">
+          <span data-i18n="ui.tree.of"></span>
+          <select id="time-scope"></select>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="time-accessed" checked>
+          <span data-i18n="ui.tree.include_access_times"></span>
+        </label>
+        <button class="solid" id="btn-timeline" data-i18n="ui.tree.timeline"></button>
+      </div>
+      <div class="view-main">
+      <div id="time-summary" class="tl-summary" hidden></div>
+      <div id="time-graph" class="tl-graph" hidden>
+        <canvas id="time-canvas" data-i18n-title="tooltips.timeline.graph"></canvas>
+        <div id="time-scroll" class="tl-scroll" role="scrollbar" tabindex="0"
+             aria-orientation="horizontal" aria-controls="time-canvas"
+             aria-valuemin="0" aria-valuemax="100"
+             data-i18n-title="tooltips.timeline.scroll" hidden>
+          <div class="tl-thumb"></div>
+        </div>
+        <div class="tl-graph-bar">
+          <span id="time-window" class="tl-window"></span>
+          <label class="check">
+            <input type="checkbox" id="time-log">
+            <span data-i18n="ui.timeline.log_scale"></span>
+          </label>
+          <button type="button" class="ghost" id="time-zoom" disabled
+                  data-i18n="ui.timeline.zoom"></button>
+          <button type="button" class="ghost" id="time-clear" disabled
+                  data-i18n="ui.timeline.clear_selection"></button>
+          <button type="button" class="ghost" id="time-out" disabled
+                  data-i18n="ui.timeline.reset_view"></button>
+        </div>
+      </div>
+      <div id="time-bar" class="tl-bar" hidden>
+        <input type="text" id="time-filter" class="dv-filter"
+               data-i18n-placeholder="tooltips.timeline.filter">
+        <label class="check">
+          <input type="checkbox" id="time-flagged">
+          <span data-i18n="ui.timeline.flagged_only"></span>
+        </label>
+        <span id="time-count" class="dv-count"></span>
+      </div>
+      <div id="time-results" class="results"></div>
+      </div>
+    </div>
+
+    <div class="view" data-view="marks">
+      <div class="controls">
+        <label class="row">
+          <span data-i18n="ui.tree.category"></span>
+          <select id="mark-filter"><option value="" data-i18n="ui.tree.all_categories"></option></select>
+        </label>
+        <label class="row">
+          <span data-i18n="ui.tree.show"></span>
+          <select id="mark-report-filter">
+            <option value="" data-i18n="ui.tree.every_mark"></option>
+            <option value="1" data-i18n="ui.tree.report"></option>
+            <option value="0" data-i18n="ui.tree.working_marks_only"></option>
+          </select>
+        </label>
+      </div>
+      <div class="view-main">
+      <div id="mark-results" class="results"></div>
+      </div>
+    </div>
+
+    <div class="view" data-view="tags">
+      <div class="controls">
+        <label class="row">
+          <span data-i18n="ui.tree.tag"></span>
+          <select id="tag-filter"><option value="" data-i18n="ui.tree.all_tags"></option></select>
+        </label>
+        <button class="ghost" id="btn-tag-export" data-i18n="ui.tree.tag_export"></button>
+      </div>
+      <div class="view-main">
+      <div id="tag-results" class="results"></div>
+      </div>
+    </div>
+
+    <div class="view" data-view="attack">
+      <div class="controls">
+        <button class="solid" id="btn-attack-refresh" data-i18n="ui.tree.attack_refresh"></button>
+        <details class="filters" id="attack-import-wrap">
+          <summary>Catalogue <span id="attack-cat"></span></summary>
+          <p class="hint" id="attack-cat-note"></p>
+          <label class="field"><span data-i18n="ui.tree.mitre_stix_bundle"></span>
+            <input type="text" id="attack-path"
+                   data-i18n-placeholder="tooltips.tree.path_enterprise_attack_json"></label>
+          <label class="field"><span data-i18n="ui.tree.version"></span>
+            <input type="text" id="attack-version"
+                   data-i18n-placeholder="tooltips.tree.attack_version"></label>
+          <button class="ghost" id="btn-attack-import" data-i18n="ui.tree.attack_import"></button>
+        </details>
+      </div>
+      <div id="attack-tactics" class="art-tree"></div>
+      <div class="view-main">
+        <div id="attack-results" class="results"></div>
+      </div>
+    </div>
+
+    <div class="view" data-view="hash">
+      <div class="controls">
+        <label class="row">
+          <span data-i18n="ui.tree.of"></span>
+          <select id="hash-scope"></select>
+        </label>
+        <button class="solid" id="btn-hash" data-i18n="ui.tree.hash"></button>
+        <p class="hint" data-i18n="help.tree.every_file_chosen_volume_md5_sha"></p>
+        <details class="filters" id="hashset-wrap">
+          <summary>Hash sets <span id="hashset-count"></span></summary>
+          <label class="field"><span data-i18n="ui.tree.list_file"></span>
+            <input type="text" id="hs-path" data-i18n-placeholder="tooltips.hash.path_hashes_csv"></label>
+          <label class="field"><span data-i18n="ui.tree.name"></span>
+            <input type="text" id="hs-name" data-i18n-placeholder="tooltips.hash.nsrl_contraband"></label>
+          <label class="row"><span data-i18n="ui.tree.treat"></span>
+            <select id="hs-kind">
+              <option value="known_bad" data-i18n="ui.tree.known_bad_surface_matches"></option>
+              <option value="known_good" data-i18n="ui.tree.known_good_safe_discount"></option>
+              <option value="notable" data-i18n="ui.tree.notable"></option>
+            </select></label>
+          <button class="ghost" id="btn-hs-import" data-i18n="ui.tree.hs_import"></button>
+          <div id="hashset-list" class="saved-list"></div>
+        </details>
+      </div>
+      <div class="view-main">
+      <div id="hash-results" class="results"></div>
+      </div>
+    </div>
+
+      </section>
+
+  <section class="panel panel-hex">
+    <div class="hex-head">
+      <span class="scope-label" id="hex-scope" data-i18n="ui.hash.hex_scope"></span>
+      <div class="goto">
+        <input type="text" id="goto" data-i18n-placeholder="tooltips.hash.offset" autocomplete="off"
+               spellcheck="false" data-i18n-aria="tooltips.hash.go_offset">
+        <button class="ghost" id="btn-maximise" aria-pressed="false"
+                data-i18n-title="tooltips.hash.collapse_listing_give_panel_viewer" data-i18n="ui.hash.maximise"></button>
+        <button class="ghost" id="btn-split" aria-pressed="false"
+                data-i18n-title="tooltips.hash.compare_second_offset_side_by_side" data-i18n="ui.hash.split"></button>
+        <button class="ghost" id="btn-mark" data-i18n="ui.hash.mark"></button>
+      </div>
+    </div>
+
+    <section class="mod-main" id="mod-main" hidden></section>
+
+    <section class="filelist" id="filelist">
+      <div class="filelist-head">
+        <span class="filelist-name" id="dir-name" data-i18n="ui.filelist.dir_name"></span>
+        <span class="filelist-meta" id="dir-meta"></span>
+      </div>
+      <div class="filelist-body" id="dirlist">
+        <p class="empty" data-i18n="help.filelist.select_partition_folder_list_contents"></p>
+      </div>
+    </section>
+    <div class="splitter" id="splitter" role="separator" tabindex="0"
+         aria-orientation="horizontal" data-i18n-aria="tooltips.preview.resize_listing"></div>
+
+    <div class="viewer" id="viewer">
+      <nav class="tabs viewer-tabs" role="tablist" data-i18n-aria="tooltips.hash.viewer">
+        <button class="tab is-on" data-pane="hex" role="tab"
+                aria-selected="true" data-i18n="ui.hash.hex"></button>
+        <button class="tab" data-pane="preview" role="tab"
+                aria-selected="false" data-i18n="ui.hash.preview"></button>
+        <button type="button" class="ghost viewer-hide" id="btn-viewer-hide"
+                data-i18n="ui.viewer.hide" data-i18n-title="tooltips.viewer.hide"></button>
+      </nav>
+
+    <div class="hex-body">
+      <canvas id="hex" tabindex="0" data-i18n-aria="tooltips.hash.hex_view"></canvas>
+
+      <section class="hex-b" id="hex-b-wrap">
+        <div class="hex-b-head">
+          <span class="hex-b-at" id="hex-b-at">0x0000000000</span>
+          <button class="ghost" id="btn-hex-b-here"
+                  data-i18n-title="tooltips.hash.bring_pane_main_cursor" data-i18n="ui.hex_b_wrap.hex_b_here"></button>
+          <button class="ghost" id="btn-hex-b-swap"
+                  data-i18n-title="tooltips.hash.swap_two_offsets" data-i18n="ui.hex_b_wrap.hex_b_swap"></button>
+        </div>
+        <canvas id="hex-b" tabindex="0" data-i18n-aria="tooltips.hash.comparison_hex_view"></canvas>
+      </section>
+
+      <div class="core-grip" id="core-grip" role="separator"
+           aria-orientation="vertical" tabindex="0"
+           data-i18n-title="tooltips.inspect.drag_widen_map_double_click_toggle"></div>
+      <div class="core" id="core">
+        <canvas id="core-canvas" data-i18n-aria="tooltips.inspect.evidence_map"></canvas>
+        <div class="core-legend" id="core-legend"></div>
+      </div>
+    </div>
+
+      <section class="preview" id="preview">
+        <div class="preview-head">
+          <span class="preview-title" id="preview-title" data-i18n="ui.preview.preview_title"></span>
+          <span class="preview-kind" id="preview-kind"></span>
+        </div>
+        <div class="preview-body" id="preview-body">
+          <p class="empty" data-i18n="help.preview.select_file_preview"></p>
+        </div>
+      </section>
+    </div>
+
+    <div class="statusline" id="status">
+      <span class="stat" id="stat-offset">—</span>
+      <span class="stat" id="stat-value"></span>
+      <span class="stat grow" id="stat-context"></span>
+      <button class="stat stat-btn" id="stat-tz" data-i18n-title="tooltips.hash.dates_show_utc" data-i18n="ui.hash.stat_tz"></button>
+      <span class="stat" id="stat-task"></span>
+      <div class="tray" id="tray">
+        <button class="tray-toggle" id="tray-toggle" aria-expanded="false">
+          <span class="spin" id="tray-spin" hidden></span>
+          <span id="tray-label" data-i18n="ui.hash.tray_label"></span>
+        </button>
+        <div class="tray-panel" id="tray-panel" hidden>
+          <div class="tray-head">
+            <span data-i18n="ui.hash.background_tasks"></span>
+            <button class="ghost" id="tray-clear" data-i18n="ui.hash.tray_clear"></button>
+          </div>
+          <div id="tray-list"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel panel-inspect" id="panel-inspect">
+    <div class="inspect-head">Inspector</div>
+    <div id="inspect" class="inspect">
+      <p class="empty" data-i18n="help.inspect.select_partition_file_carved_item_see"></p>
+    </div>
+    <details class="fold struct-wrap" id="struct-wrap">
+      <summary>On-disk structures<span class="struct-count" id="struct-count"></span></summary>
+      <div id="structs"><p class="empty" data-i18n="help.inspect.no_evidence_open"></p></div>
+    </details>
+    <details class="fold interp-wrap" id="interp-wrap" open>
+      <summary>Data interpreter<span class="interp-at" id="interp-at"></span></summary>
+      <div id="interp" class="interp">
+        <p class="empty" data-i18n="help.inspect.click_hex_view"></p>
+      </div>
+    </details>
+  </section>
+</main>
+
+<dialog id="dlg-remove">
+  <form method="dialog" class="dlg">
+    <h2 data-i18n="ui.remove.remove_evidence_from_case"></h2>
+    <p class="hint" data-i18n="help.remove.evidence_file_disk_never_touched_what"></p>
+    <div class="field">
+      <span data-i18n="ui.remove.exhibit"></span>
+      <strong id="remove-what"></strong>
+      <code id="remove-path" class="dim"></code>
+    </div>
+    <div class="notice bad" id="remove-holdings"></div>
+    <p class="hint" data-i18n="help.remove.cannot_undone_audit_log_keeps_record"></p>
+    <menu>
+      <button value="cancel" class="ghost" data-i18n="ui.remove.cancel"></button>
+      <button value="ok" class="solid danger" data-i18n="ui.remove.remove"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-open">
+  <form method="dialog" class="dlg">
+    <h2 id="open-title" data-i18n="ui.open.title"></h2>
+    <div class="open-kinds" id="open-kinds" role="radiogroup"
+         data-i18n-aria="ui.open.kind_group">
+      <button type="button" class="open-kind is-on" data-kind="image"
+              role="radio" aria-checked="true">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5"/><path d="M4 8h4"/><circle cx="11.5" cy="8" r="0.8"/></svg>
+        <span data-i18n="ui.open.kind_image"></span>
+      </button>
+      <button type="button" class="open-kind" data-kind="file"
+              role="radio" aria-checked="false">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M9.5 1.5v3h3"/></svg>
+        <span data-i18n="ui.open.kind_file"></span>
+      </button>
+      <button type="button" class="open-kind" data-kind="folder"
+              role="radio" aria-checked="false">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 3.5h4.5l1.5 1.5h7v8.5h-13z"/></svg>
+        <span data-i18n="ui.open.kind_folder"></span>
+      </button>
+    </div>
+    <p class="hint" id="open-hint"></p>
+    <p class="hint" id="open-add-note" hidden></p>
+    <label class="field" id="open-examiner-field">
+      <span data-i18n="ui.open.examiner"></span>
+      <input type="text" id="open-examiner" data-i18n-placeholder="tooltips.tag.your_name">
+    </label>
+    <label class="field">
+      <span data-i18n="ui.open.path"></span>
+      <span class="pair">
+        <input type="text" id="open-path">
+        <button type="button" class="ghost" id="open-browse" data-i18n="ui.open.browse"></button>
+        <button type="button" class="ghost" id="open-usedir" hidden
+                data-i18n="ui.open.use_folder"></button>
+      </span>
+    </label>
+    <label class="field" id="open-case-field">
+      <span data-i18n="ui.open.case_file"></span>
+      <input type="text" id="open-case"
+             data-i18n-placeholder="tooltips.tag.optional_defaults_image_strata">
+    </label>
+    <div id="browser" class="browser"></div>
+    <menu>
+      <button value="cancel" class="ghost" data-i18n="ui.open.cancel"></button>
+      <button value="ok" class="solid" id="open-confirm" data-i18n="ui.open.confirm"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-new-case">
+  <form method="dialog" class="dlg">
+    <h2 data-i18n="ui.newcase.title"></h2>
+    <p class="hint" data-i18n="help.newcase.intro"></p>
+    <label class="field">
+      <span data-i18n="ui.newcase.name"></span>
+      <input type="text" id="newcase-name" data-i18n-placeholder="tooltips.newcase.name">
+    </label>
+    <label class="field">
+      <span data-i18n="ui.newcase.examiner"></span>
+      <input type="text" id="newcase-examiner" data-i18n-placeholder="tooltips.busy.your_name">
+    </label>
+    <label class="field">
+      <span data-i18n="ui.newcase.file"></span>
+      <input type="text" id="newcase-path" data-i18n-placeholder="tooltips.newcase.file">
+    </label>
+    <div id="newcase-browser" class="browser"></div>
+    <div class="notice" id="newcase-where"></div>
+    <menu>
+      <button value="cancel" class="ghost" data-i18n="ui.newcase.cancel"></button>
+      <button value="ok" class="solid" data-i18n="ui.newcase.create"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-close-case">
+  <form method="dialog" class="dlg">
+    <h2 data-i18n="ui.closecase.title"></h2>
+    <p class="hint" data-i18n="help.closecase.intro"></p>
+    <div class="field">
+      <span data-i18n="ui.closecase.case"></span>
+      <strong id="closecase-what"></strong>
+      <code id="closecase-path" class="dim"></code>
+    </div>
+    <div class="notice" id="closecase-holds"></div>
+    <menu>
+      <button value="cancel" class="ghost" data-i18n="ui.closecase.cancel"></button>
+      <button value="ok" class="solid" data-i18n="ui.closecase.close"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-case">
+  <form method="dialog" class="dlg">
+    <h2 data-i18n="ui.case.open_case"></h2>
+    <p class="hint" data-i18n="help.case.case_file_records_evidence_bookmarks_audit"></p>
+    <label class="field">
+      <span data-i18n="ui.case.examiner"></span>
+      <input type="text" id="case-examiner" data-i18n-placeholder="tooltips.busy.your_name">
+    </label>
+    <label class="field">
+      <span data-i18n="ui.case.case_file"></span>
+      <input type="text" id="case-path" data-i18n-placeholder="tooltips.busy.path_case_strata">
+    </label>
+    <div id="case-browser" class="browser"></div>
+    <div id="case-peek" class="case-peek"></div>
+    <menu>
+      <button value="cancel" class="ghost" data-i18n="ui.case.cancel"></button>
+      <button value="ok" class="solid" data-i18n="ui.case.open_case"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-tag">
+  <form method="dialog" class="dlg">
+    <h2 data-i18n="ui.tag.tag_item"></h2>
+    <p class="hint" id="tag-item"></p>
+    <label class="field"><span data-i18n="ui.tag.tag"></span>
+      <select id="tag-name"></select></label>
+    <label class="field"><span data-i18n="ui.tag.new"></span>
+      <input type="text" id="tag-custom" data-i18n-placeholder="tooltips.tz.custom_tag"></label>
+    <label class="field"><span>ATT&amp;CK technique <em data-i18n="ui.tag.optional"></em></span>
+      <select id="tag-attack"><option value="" data-i18n="ui.tag.none"></option></select></label>
+    <p class="hint" id="tag-attack-note" hidden></p>
+    <label class="field"><span data-i18n="ui.tag.note"></span>
+      <textarea id="tag-note" rows="3"></textarea></label>
+    <menu>
+      <button value="cancel" class="ghost" data-i18n="ui.tag.cancel"></button>
+      <button value="ok" class="solid" data-i18n="ui.tag.apply_tag"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-busy" class="busy">
+  <button type="button" class="dlg-x" id="busy-min" data-i18n-aria="tooltips.mark.minimise_task_tray" data-i18n="ui.busy.busy_min"></button>
+  <h2 id="busy-title" data-i18n="ui.busy.busy_title"></h2>
+  <p class="hint" id="busy-detail"></p>
+  <div class="busy-bar"><i id="busy-fill"></i></div>
+  <div class="busy-foot">
+    <span class="busy-pct" id="busy-pct">0%</span>
+    <button class="ghost" id="busy-cancel" hidden data-i18n="ui.busy.busy_cancel"></button>
+  </div>
+</dialog>
+
+<dialog id="dlg-tz">
+  <form method="dialog" class="dlg wide">
+    <h2 data-i18n="ui.tz.time_zone"></h2>
+    <p class="hint" data-i18n="help.tz.every_timestamp_stored_utc_stays_way"></p>
+    <div id="tz-list"></div>
+    <label class="field">
+      <span data-i18n="ui.tz.set_offset_by_hand_minutes_from"></span>
+      <input type="number" id="tz-manual" step="15" data-i18n-placeholder="tooltips.mark.e_g_60_utc_01_00">
+    </label>
+    <p class="hint" id="tz-note"></p>
+    <menu>
+      <button value="cancel" class="ghost" data-i18n="ui.tz.keep_utc_only"></button>
+      <button value="ok" id="tz-go" data-i18n="ui.tz.tz_go"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-unlock">
+  <form method="dialog" class="dlg">
+    <h2 id="unlock-title" data-i18n="ui.unlock.unlock_title"></h2>
+    <p class="hint" id="unlock-summary"></p>
+    <div id="unlock-protectors" class="protectors"></div>
+    <label class="field" id="unlock-field">
+      <span id="unlock-label" data-i18n="ui.unlock.unlock_label"></span>
+      <input type="password" id="unlock-secret" autocomplete="off"
+             spellcheck="false" data-i18n-placeholder="tooltips.who.password_48_digits_eight_groups">
+    </label>
+    <label class="check"><input type="checkbox" id="unlock-show">
+      <span data-i18n="ui.unlock.show_what_i_typed"></span></label>
+    <p class="hint" id="unlock-note"></p>
+    <p class="hint err" id="unlock-error" hidden></p>
+    <menu>
+      <button value="cancel" class="ghost" id="unlock-cancel" data-i18n="ui.unlock.unlock_cancel"></button>
+      <button value="ok" id="unlock-go" data-i18n="ui.unlock.unlock_go"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-carve-sig">
+  <form method="dialog" class="dlg wide">
+    <h2 id="sig-title" data-i18n="ui.carve.sig.title_add"></h2>
+    <p class="hint" data-i18n="help.carve.signature_intro"></p>
+    <div class="sig-grid">
+      <label class="field"><span data-i18n="ui.carve.sig.name"></span>
+        <input type="text" id="sig-name" maxlength="60" autocomplete="off"></label>
+      <label class="field"><span data-i18n="ui.carve.sig.ext"></span>
+        <input type="text" id="sig-ext" maxlength="11" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <label class="field"><span data-i18n="ui.carve.sig.header"></span>
+      <input type="text" id="sig-header" class="sig-bytes" autocomplete="off" spellcheck="false"
+             data-i18n-placeholder="tooltips.carve.pattern_example"></label>
+    <p class="hint" data-i18n="help.carve.pattern_syntax"></p>
+    <div class="sig-grid">
+      <label class="field"><span data-i18n="ui.carve.sig.header_offset"></span>
+        <input type="number" id="sig-offset" min="0" max="4096" step="1"></label>
+      <label class="field"><span data-i18n="ui.carve.sig.max_size"></span>
+        <input type="text" id="sig-max" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <fieldset class="sig-set">
+      <legend data-i18n="ui.carve.sig.footer_legend"></legend>
+      <label class="field"><span data-i18n="ui.carve.sig.footer"></span>
+        <input type="text" id="sig-footer" class="sig-bytes" autocomplete="off" spellcheck="false"></label>
+      <div class="sig-grid">
+        <label class="field"><span data-i18n="ui.carve.sig.footer_mode"></span>
+          <select id="sig-footer-mode">
+            <option value="first" data-i18n="ui.carve.sig.footer_first"></option>
+            <option value="last" data-i18n="ui.carve.sig.footer_last"></option>
+          </select></label>
+        <label class="field"><span data-i18n="ui.carve.sig.footer_extra"></span>
+          <input type="number" id="sig-footer-extra" min="0" max="65536" step="1"></label>
+      </div>
+      <label class="field"><span data-i18n="ui.carve.sig.missing_footer"></span>
+        <select id="sig-missing">
+          <option value="discard" data-i18n="ui.carve.sig.missing_discard"></option>
+          <option value="estimate" data-i18n="ui.carve.sig.missing_estimate"></option>
+        </select></label>
+    </fieldset>
+    <fieldset class="sig-set">
+      <legend data-i18n="ui.carve.sig.estimate_legend"></legend>
+      <label class="check"><input type="checkbox" checked disabled>
+        <span data-i18n="ui.carve.sig.stop_next_header"></span></label>
+      <label class="check"><input type="checkbox" id="sig-stop-alloc">
+        <span data-i18n="ui.carve.sig.stop_allocated"></span></label>
+      <label class="check"><input type="checkbox" id="sig-stop-zeros">
+        <span data-i18n="ui.carve.sig.stop_zeros"></span></label>
+      <label class="check"><input type="checkbox" checked disabled>
+        <span data-i18n="ui.carve.sig.stop_limit"></span></label>
+    </fieldset>
+    <div class="notice ok" id="sig-method"></div>
+    <p class="hint err" id="sig-error" hidden></p>
+    <menu class="save-first">
+      <button value="ok" class="solid" data-i18n="ui.carve.sig.save"></button>
+      <button value="cancel" class="ghost" data-i18n="ui.carve.sig.cancel"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-audit">
+  <form method="dialog" class="dlg wide">
+    <h2 data-i18n="ui.audit.audit_log"></h2>
+    <p class="hint" id="audit-state"></p>
+    <div id="audit-body" class="audit"></div>
+    <menu><button value="ok" class="ghost" data-i18n="ui.audit.close"></button></menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-mark">
+  <form method="dialog" class="dlg">
+    <h2 data-i18n="ui.mark.mark_bytes"></h2>
+    <label class="field"><span data-i18n="ui.mark.label"></span>
+      <input type="text" id="mark-label" data-i18n-placeholder="tooltips.picker.what"></label>
+    <label class="field"><span data-i18n="ui.mark.category"></span>
+      <div class="cats" id="mark-cats"></div></label>
+    <label class="field"><span data-i18n="ui.mark.note"></span>
+      <textarea id="mark-note" rows="3"></textarea></label>
+    <label class="check">
+      <input type="checkbox" id="mark-in-report" checked>
+      <span data-i18n="ui.mark.include_examination_report"></span>
+    </label>
+    <p class="hint" data-i18n="help.mark.working_marks_used_navigate_do_not"></p>
+    <p class="hint" id="mark-range"></p>
+    <menu>
+      <button value="cancel" class="ghost" data-i18n="ui.mark.cancel"></button>
+      <button value="ok" class="solid" data-i18n="ui.mark.save_mark"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-who">
+  <form method="dialog" class="dlg">
+    <h2 data-i18n="ui.who.examiner_name"></h2>
+    <label class="field"><span data-i18n="ui.who.name"></span>
+      <input type="text" id="who-input" data-i18n-placeholder="tooltips.keys.e_g_a_examiner"
+             autocomplete="off" spellcheck="false"></label>
+    <p class="hint" data-i18n-html="help.who.attribution"></p>
+    <div id="who-others"></div>
+    <menu>
+      <button value="cancel" class="ghost" data-i18n="ui.who.cancel"></button>
+      <button value="ok" class="solid" data-i18n="ui.who.use_name"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-settings">
+  <form method="dialog" class="dlg">
+    <h2 data-i18n="ui.settings.title"></h2>
+
+    <h3 data-i18n="ui.settings.messages"></h3>
+    <p class="hint" data-i18n="help.settings.messages"></p>
+    <label class="check"><input type="checkbox" id="set-notify-action">
+      <span data-i18n="ui.settings.notify_action"></span></label>
+    <label class="check"><input type="checkbox" id="set-notify-task">
+      <span data-i18n="ui.settings.notify_task"></span></label>
+    <label class="check"><input type="checkbox" id="set-notify-colleague">
+      <span data-i18n="ui.settings.notify_colleague"></span></label>
+    <p class="hint" data-i18n="help.settings.problems_always"></p>
+
+    <h3 data-i18n="ui.settings.appearance"></h3>
+    <label class="field"><span data-i18n="ui.settings.theme"></span>
+      <select id="set-theme">
+        <option value="dark" data-i18n="ui.settings.theme_dark"></option>
+        <option value="light" data-i18n="ui.settings.theme_light"></option>
+      </select></label>
+    <label class="field"><span data-i18n="ui.settings.times"></span>
+      <select id="set-time">
+        <option value="both" data-i18n="ui.settings.times_both"></option>
+        <option value="utc" data-i18n="ui.settings.times_utc"></option>
+        <option value="local" data-i18n="ui.settings.times_local"></option>
+      </select></label>
+    <p class="hint" data-i18n="help.settings.times"></p>
+    <label class="field"><span data-i18n="ui.settings.offsets"></span>
+      <select id="set-offsets">
+        <option value="physical" data-i18n="ui.settings.offsets_physical"></option>
+        <option value="logical" data-i18n="ui.settings.offsets_logical"></option>
+      </select></label>
+
+    <p class="hint" data-i18n="help.settings.where_kept"></p>
+    <menu>
+      <button value="cancel" class="ghost" data-i18n="ui.settings.close"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-picker">
+  <form method="dialog" class="dlg wide">
+    <h2 data-i18n="ui.picker.run_artefacts"></h2>
+    <p class="hint" data-i18n="help.picker.everything_here_runs_background_cheapest_first"></p>
+    <div class="picker-bar">
+      <button class="ghost" id="pick-triage" data-i18n="ui.picker.pick_triage"></button>
+      <button class="ghost" id="pick-all" data-i18n="ui.picker.pick_all"></button>
+      <button class="ghost" id="pick-none" data-i18n="ui.picker.pick_none"></button>
+    </div>
+    <div id="picker-list" class="picker"></div>
+    <menu>
+      <button value="cancel" class="ghost" id="pick-cancel" data-i18n="ui.picker.pick_cancel"></button>
+      <button value="ok" class="solid" id="pick-run" data-i18n="ui.picker.pick_run"></button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-palette" class="palette">
+  <input type="text" id="palette-q" data-i18n-placeholder="tooltips.hash.type_command"
+         autocomplete="off" spellcheck="false" data-i18n-aria="tooltips.hash.command">
+  <div class="pal-list" id="palette-list"></div>
+  <p class="hint pal-foot" data-i18n="help.palette.move_enter_run_esc_close"></p>
+</dialog>
+
+<dialog id="dlg-keys">
+  <form method="dialog">
+    <h2 data-i18n="ui.keys.keyboard"></h2>
+    <table class="keys">
+      <tr><td><kbd class="mod">Ctrl</kbd>+<kbd>K</kbd></td><td data-i18n="ui.keys.command_palette"></td></tr>
+      <tr><td><kbd class="mod">Ctrl</kbd>+<kbd>G</kbd></td><td data-i18n="ui.keys.go_offset"></td></tr>
+      <tr><td><kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd></td><td data-i18n="ui.keys.switch_tab"></td></tr>
+      <tr><td><kbd>Alt</kbd>+<kbd>0</kbd></td><td data-i18n="ui.keys.cases"></td></tr>
+      <tr><td><kbd>/</kbd></td><td data-i18n="ui.keys.search"></td></tr>
+      <tr><td><kbd>?</kbd></td><td data-i18n="ui.keys.list"></td></tr>
+      <tr><td><kbd>Esc</kbd></td><td data-i18n="ui.keys.close_what_open"></td></tr>
+    </table>
+    <h3 data-i18n="ui.keys.hex_view"></h3>
+    <table class="keys">
+      <tr><td><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd></td>
+          <td data-i18n="ui.keys.move_cursor"></td></tr>
+      <tr><td><kbd>PgUp</kbd><kbd>PgDn</kbd></td><td data-i18n="ui.keys.move_screen"></td></tr>
+      <tr><td><kbd>Home</kbd><kbd>End</kbd></td>
+          <td data-i18n="ui.keys.start_end_scope"></td></tr>
+    </table>
+    <p class="hint" data-i18n="help.keys.unmodified_keys_ignored_while_text_field"></p>
+    <menu><button value="ok" class="solid" data-i18n="ui.keys.close"></button></menu>
+  </form>
+</dialog>
+
+<script src="strings.js"></script>
+</body>
+</html>

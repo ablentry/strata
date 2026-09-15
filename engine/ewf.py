@@ -1,0 +1,571 @@
+import io
+import os
+import re
+import struct
+import threading
+
+from . import vhdx as vhdx_mod
+from . import ad1 as ad1_mod
+from . import vmdk as vmdk_mod
+from .inflate import inflate_capped
+import zlib
+from collections import OrderedDict
+
+from .text import t as _t
+
+EVF_SIG = b"EVF\x09\x0d\x0a\xff\x00"
+LVF_SIG = b"LVF\x09\x0d\x0a\xff\x00"
+EVF2_SIG = b"EVF2\x0d\x0a\x81\x00"
+
+SECTION_DESC = 76
+FILE_HEADER = 13
+
+class EwfError(Exception):
+    pass
+
+class Section:
+    __slots__ = ("type", "start", "next_offset", "size", "data_start", "data_size")
+
+    def __init__(self, type_, start, next_offset, size):
+        self.type = type_
+        self.start = start
+        self.next_offset = next_offset
+        self.size = size
+        self.data_start = start + SECTION_DESC
+        self.data_size = max(0, size - SECTION_DESC)
+
+    def __repr__(self):
+        return "<Section %s @%d size=%d>" % (self.type, self.start, self.size)
+
+class Chunk:
+    __slots__ = ("seg", "offset", "length", "compressed")
+
+    def __init__(self, seg, offset, length, compressed):
+        self.seg = seg
+        self.offset = offset
+        self.length = length
+        self.compressed = compressed
+
+def discover_segments(path):
+    base, ext = os.path.splitext(path)
+    if len(ext) != 4:
+        return [path]
+    stem = ext[1]
+    directory = os.path.dirname(os.path.abspath(path)) or "."
+    prefix = os.path.basename(base)
+    pattern = re.compile(
+        r"^" + re.escape(prefix) + r"\.(" + re.escape(stem) + r"[0-9]{2}|"
+        + re.escape(stem.upper()) + r"[A-Z]{2}|[A-Z]{3})$",
+        re.IGNORECASE,
+    )
+    found = []
+    for name in os.listdir(directory):
+        if pattern.match(name):
+            found.append(os.path.join(directory, name))
+
+    def order(p):
+        e = os.path.splitext(p)[1][1:].upper()
+        if e[1:].isdigit():
+            return (0, int(e[1:]))
+        return (1, e)
+
+    return sorted(found, key=order) if found else [path]
+
+class EwfImage:
+
+    def __init__(self, path, cache_chunks=64):
+        self.path = path
+        self.segment_paths = discover_segments(path)
+        self._handles = {}
+        self.header = {}
+        self.chunks = []
+        self.chunk_size = 32768
+        self.sectors_per_chunk = 64
+        self.bytes_per_sector = 512
+        self.sector_count = 0
+        self.media_type = None
+        self.compression_level = 0
+        self.stored_md5 = None
+        self.stored_sha1 = None
+        self.sections = []
+        self.findings = []
+        self._cache = OrderedDict()
+        self._cache_max = cache_chunks
+        self._io_lock = threading.Lock()
+        self._pos = 0
+        self._parse()
+
+    def _fh(self, seg):
+        h = self._handles.get(seg)
+        if h is None:
+            h = open(self.segment_paths[seg], "rb")
+            self._handles[seg] = h
+        return h
+
+    def close(self):
+        for h in self._handles.values():
+            h.close()
+        self._handles.clear()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    def _parse(self):
+        for seg_index, seg_path in enumerate(self.segment_paths):
+            fh = self._fh(seg_index)
+            sig = fh.read(8)
+            if sig == EVF2_SIG:
+                raise EwfError(
+                    _t("ewf.ewf_v2_ex01_detected")
+                )
+            if sig not in (EVF_SIG, LVF_SIG):
+                raise EwfError(_t("ewf.ewf_segment_file") % seg_path)
+            fh.read(5)
+
+            offset = FILE_HEADER
+            pending_table = None
+            sectors_extent = None
+            guard = 0
+            while True:
+                guard += 1
+                if guard > 200000:
+                    self.findings.append("Section chain in segment %d exceeded "
+                                         "sane length; stopped." % seg_index)
+                    break
+                sec = self._read_section(fh, offset)
+                if sec is None:
+                    break
+                self.sections.append((seg_index, sec))
+
+                if sec.type == "sectors":
+                    sectors_extent = (sec.data_start, sec.start + sec.size)
+                elif sec.type in ("volume", "disk"):
+                    self._parse_volume(fh, sec)
+                elif sec.type == "header2":
+                    self._parse_header(fh, sec, utf16=True)
+                elif sec.type == "header":
+                    if not self.header:
+                        self._parse_header(fh, sec, utf16=False)
+                elif sec.type == "table":
+                    pending_table = sec
+                    self._parse_table(fh, sec, seg_index, sectors_extent)
+                elif sec.type == "digest":
+                    self._parse_digest(fh, sec)
+                elif sec.type == "hash":
+                    self._parse_hash(fh, sec)
+
+                if sec.type in ("next", "done"):
+                    break
+                if sec.next_offset <= sec.start:
+                    self.findings.append(
+                        "Section '%s' at %d has a non-advancing next pointer "
+                        "(possible cyclic chain)." % (sec.type, sec.start))
+                    break
+                offset = sec.next_offset
+            del pending_table
+
+        if not self.chunks:
+            raise EwfError(_t("ewf.chunk_table_found_evidence"))
+
+        self.size = self.sector_count * self.bytes_per_sector
+        if self.size == 0:
+            self.size = len(self.chunks) * self.chunk_size
+
+    def _read_section(self, fh, offset):
+        fh.seek(offset)
+        raw = fh.read(SECTION_DESC)
+        if len(raw) < SECTION_DESC:
+            return None
+        type_ = raw[0:16].split(b"\x00")[0].decode("ascii", "replace")
+        next_offset, size = struct.unpack("<QQ", raw[16:32])
+        stored = struct.unpack("<I", raw[72:76])[0]
+        if zlib.adler32(raw[:72]) & 0xFFFFFFFF != stored:
+            self.findings.append(
+                "Section descriptor checksum mismatch at offset %d (type '%s')."
+                % (offset, type_))
+        if not type_:
+            return None
+        return Section(type_, offset, next_offset, size)
+
+    def _parse_volume(self, fh, sec):
+        fh.seek(sec.data_start)
+        data = fh.read(sec.data_size)
+        if len(data) < 52:
+            self.findings.append("Volume section too short to parse.")
+            return
+        self.media_type = data[0]
+        chunk_count = struct.unpack("<I", data[4:8])[0]
+        self.sectors_per_chunk = struct.unpack("<I", data[8:12])[0] or 64
+        self.bytes_per_sector = struct.unpack("<I", data[12:16])[0] or 512
+        self.sector_count = struct.unpack("<Q", data[16:24])[0]
+        self.media_flags = data[36]
+        self.compression_level = data[52] if len(data) > 52 else 0
+        self.chunk_size = self.sectors_per_chunk * self.bytes_per_sector
+        self._declared_chunks = chunk_count
+
+    def _parse_header(self, fh, sec, utf16):
+        fh.seek(sec.data_start)
+        blob = fh.read(sec.data_size)
+        text, over = inflate_capped(blob, 1 << 20)
+        if over:
+            self.findings.append("Header section inflates to more than 1 MB; "
+                                 "only that much was read.")
+        if not text:
+            self.findings.append("Header section failed to decompress.")
+            return
+        try:
+            text = text.decode("utf-16-le" if utf16 else "latin-1")
+        except UnicodeDecodeError:
+            text = text.decode("latin-1")
+        lines = [ln for ln in text.replace("\r\n", "\n").split("\n") if ln.strip()]
+        for i, line in enumerate(lines):
+            if line.startswith("main") and i + 2 < len(lines):
+                keys = lines[i + 1].split("\t")
+                vals = lines[i + 2].split("\t")
+                names = {
+                    "a": "description", "c": "case_number", "n": "evidence_number",
+                    "e": "examiner", "t": "notes", "av": "acquiry_software",
+                    "ov": "acquiry_os", "m": "acquisition_date",
+                    "u": "system_date", "p": "password_hash", "dc": "unknown_dc",
+                    "pid": "process_id", "r": "compression",
+                }
+                for k, v in zip(keys, vals):
+                    if v:
+                        self.header[names.get(k, k)] = v
+                break
+
+    def _parse_table(self, fh, sec, seg_index, sectors_extent):
+        fh.seek(sec.data_start)
+        head = fh.read(24)
+        if len(head) < 24:
+            self.findings.append("Table section header truncated.")
+            return
+        entry_count = struct.unpack("<I", head[0:4])[0]
+        base_offset = struct.unpack("<Q", head[8:16])[0]
+        stored = struct.unpack("<I", head[20:24])[0]
+        if zlib.adler32(head[:20]) & 0xFFFFFFFF != stored:
+            self.findings.append("Table header checksum mismatch at %d." % sec.start)
+        if entry_count == 0 or entry_count > 0x0FFFFFFF:
+            self.findings.append("Table entry count %d is implausible." % entry_count)
+            return
+
+        raw = fh.read(entry_count * 4)
+        if len(raw) < entry_count * 4:
+            self.findings.append("Table entries truncated at %d." % sec.start)
+            entry_count = len(raw) // 4
+        entries = struct.unpack("<%dI" % entry_count, raw[: entry_count * 4])
+
+        limit = sectors_extent[1] if sectors_extent else None
+        for i, e in enumerate(entries):
+            compressed = bool(e & 0x80000000)
+            off = base_offset + (e & 0x7FFFFFFF)
+            if i + 1 < entry_count:
+                nxt = base_offset + (entries[i + 1] & 0x7FFFFFFF)
+                length = nxt - off
+            elif limit is not None:
+                length = limit - off
+            else:
+                length = self.chunk_size + 4
+            if length <= 0:
+                self.findings.append(
+                    "Chunk %d in segment %d has non-positive length; "
+                    "falling back to nominal size." % (i, seg_index))
+                length = self.chunk_size + 4
+            self.chunks.append(Chunk(seg_index, off, length, compressed))
+
+    def _parse_digest(self, fh, sec):
+        fh.seek(sec.data_start)
+        d = fh.read(sec.data_size)
+        if len(d) >= 36:
+            md5, sha1 = d[0:16], d[16:36]
+            if any(md5):
+                self.stored_md5 = md5.hex()
+            if any(sha1):
+                self.stored_sha1 = sha1.hex()
+
+    def _parse_hash(self, fh, sec):
+        fh.seek(sec.data_start)
+        d = fh.read(sec.data_size)
+        if len(d) >= 16 and any(d[0:16]) and not self.stored_md5:
+            self.stored_md5 = d[0:16].hex()
+
+    def _chunk(self, index):
+        hit = self._cache.get(index)
+        if hit is not None:
+            self._cache.move_to_end(index)
+            return hit
+        if index < 0 or index >= len(self.chunks):
+            return b""
+        c = self.chunks[index]
+        with self._io_lock:
+            fh = self._fh(c.seg)
+            fh.seek(c.offset)
+            raw = fh.read(c.length)
+        if c.compressed:
+            data, over = inflate_capped(raw, self.chunk_size)
+            if over:
+                self.findings.append(
+                    "Chunk %d inflates past the %d-byte chunk size this "
+                    "image declares; it was cut off there."
+                    % (index, self.chunk_size))
+            elif not data:
+                self.findings.append("Chunk %d failed to decompress; "
+                                     "zero-filled." % index)
+                data = b"\x00" * self.chunk_size
+        else:
+            if len(raw) >= 4:
+                payload, crc = raw[:-4], struct.unpack("<I", raw[-4:])[0]
+                if zlib.adler32(payload) & 0xFFFFFFFF != crc:
+                    self.findings.append("Chunk %d failed its Adler-32 "
+                                         "integrity check." % index)
+                data = payload
+            else:
+                data = raw
+        self._cache[index] = data
+        if len(self._cache) > self._cache_max:
+            self._cache.popitem(last=False)
+        return data
+
+    def read_at(self, offset, length):
+        if offset < 0:
+            raise ValueError(_t("ewf.negative_offset"))
+        if offset >= self.size:
+            return b""
+        length = min(length, self.size - offset)
+        out = bytearray()
+        pos = offset
+        remaining = length
+        while remaining > 0:
+            idx = pos // self.chunk_size
+            within = pos % self.chunk_size
+            data = self._chunk(idx)
+            if not data:
+                break
+            take = data[within:within + remaining]
+            if not take:
+                break
+            out += take
+            pos += len(take)
+            remaining -= len(take)
+        return bytes(out)
+
+    def read(self, n=-1):
+        if n < 0:
+            n = self.size - self._pos
+        d = self.read_at(self._pos, n)
+        self._pos += len(d)
+        return d
+
+    def seek(self, off, whence=io.SEEK_SET):
+        if whence == io.SEEK_SET:
+            self._pos = off
+        elif whence == io.SEEK_CUR:
+            self._pos += off
+        else:
+            self._pos = self.size + off
+        return self._pos
+
+    def verify(self, progress=None):
+        import hashlib
+        md5, sha1 = hashlib.md5(), hashlib.sha1()
+        step = max(1, len(self.chunks) // 100)
+        for i in range(len(self.chunks)):
+            d = self._chunk(i)
+            md5.update(d)
+            sha1.update(d)
+            if progress and i % step == 0:
+                progress(i / max(1, len(self.chunks)))
+        result = {
+            "computed_md5": md5.hexdigest(),
+            "computed_sha1": sha1.hexdigest(),
+            "stored_md5": self.stored_md5,
+            "stored_sha1": self.stored_sha1,
+        }
+        result["md5_match"] = (self.stored_md5 is not None
+                               and self.stored_md5 == result["computed_md5"])
+        result["sha1_match"] = (self.stored_sha1 is not None
+                                and self.stored_sha1 == result["computed_sha1"])
+        return result
+
+    def info(self):
+        return {
+            "format": "EWF v1 (E01)",
+            "segments": [os.path.basename(p) for p in self.segment_paths],
+            "size": self.size,
+            "sector_count": self.sector_count,
+            "bytes_per_sector": self.bytes_per_sector,
+            "sectors_per_chunk": self.sectors_per_chunk,
+            "chunk_size": self.chunk_size,
+            "chunk_count": len(self.chunks),
+            "compression_level": self.compression_level,
+            "compressed_chunks": sum(1 for c in self.chunks if c.compressed),
+            "media_type": self.media_type,
+            "media_flags": getattr(self, "media_flags", 0),
+            "stored_md5": self.stored_md5,
+            "stored_sha1": self.stored_sha1,
+            "acquisition": dict(self.header),
+            "findings": list(self.findings),
+        }
+
+class RawImage:
+
+    def __init__(self, path):
+        self.path = path
+        self.segment_paths = [path]
+        self._fh = open(path, "rb")
+        self.size = os.path.getsize(path)
+        self.bytes_per_sector = 512
+        self.findings = []
+        self.header = {}
+        self.stored_md5 = None
+        self.stored_sha1 = None
+        self._pos = 0
+        self._io_lock = threading.Lock()
+
+    def read_at(self, offset, length):
+        if offset >= self.size:
+            return b""
+        with self._io_lock:
+            self._fh.seek(offset)
+            return self._fh.read(min(length, self.size - offset))
+
+    def read(self, n=-1):
+        d = self.read_at(self._pos, self.size - self._pos if n < 0 else n)
+        self._pos += len(d)
+        return d
+
+    def seek(self, off, whence=io.SEEK_SET):
+        if whence == io.SEEK_SET:
+            self._pos = off
+        elif whence == io.SEEK_CUR:
+            self._pos += off
+        else:
+            self._pos = self.size + off
+        return self._pos
+
+    def close(self):
+        self._fh.close()
+
+    def verify(self, progress=None):
+        import hashlib
+        md5, sha1 = hashlib.md5(), hashlib.sha1()
+        pos = 0
+        while pos < self.size:
+            d = self.read_at(pos, 1 << 20)
+            if not d:
+                break
+            md5.update(d); sha1.update(d)
+            pos += len(d)
+            if progress:
+                progress(pos / self.size)
+        return {"computed_md5": md5.hexdigest(), "computed_sha1": sha1.hexdigest(),
+                "stored_md5": None, "stored_sha1": None,
+                "md5_match": None, "sha1_match": None}
+
+    def info(self):
+        return {"format": "Raw / dd", "segments": [os.path.basename(self.path)],
+                "size": self.size, "bytes_per_sector": 512,
+                "chunk_size": 1 << 20, "acquisition": {}, "findings": []}
+
+UNSUPPORTED = (
+    (b"AFF\x00", "Advanced Forensic Format (AFF)",
+     "Not implemented. Convert to E01 or raw first."),
+    (b"EVF2\x0d\x0a\x81\x00", "EWF2 / Ex01",
+     "The version 2 container format is not implemented; version 1 (E01) is. "
+     "Convert, or re-acquire as E01."),
+    (b"COWD", "VMware COW disk",
+     "An older VMware container with its own indirection. Convert it first."),
+    (b"conectix", "Virtual PC / Hyper-V disk (VHD)",
+     "This is a VHD footer. A fixed VHD is raw data with the footer "
+     "appended and can be read as raw; a dynamic or differencing one cannot. "
+     "Convert it, or read the fixed variant as raw."),
+    (b"QFI\xfb", "QEMU copy-on-write (QCOW/QCOW2)",
+     "QCOW stores data through an indirection table. Convert with qemu-img."),
+    (b"<<< Oracle VM VirtualBox Disk Image >>>", "VirtualBox disk (VDI)",
+     "VDI has its own block map. Convert with VBoxManage or qemu-img."),
+    (b"SQLite format 3\x00", "SQLite database",
+     "This is a database, not a disk image. Open it from within a "
+     "filesystem, where the SQLite viewer will read it."),
+    (b"Rar!\x1a\x07", "RAR archive",
+     "An archive is not a disk image. Extract it first."),
+    (b"7z\xbc\xaf\x27\x1c", "7-Zip archive",
+     "An archive is not a disk image. Extract it first."),
+)
+
+class UnsupportedContainer(Exception):
+
+    def __init__(self, fmt, advice):
+        super().__init__("%s. %s" % (fmt, advice))
+        self.format = fmt
+        self.advice = advice
+
+def identify_unsupported(head):
+    for magic, fmt, advice in UNSUPPORTED:
+        if head.startswith(magic):
+            return fmt, advice
+    return None
+
+def open_image(path):
+    with open(path, "rb") as fh:
+        head = fh.read(64)
+    sig = head[:8]
+    if sig in (EVF_SIG, LVF_SIG) or sig == EVF2_SIG:
+        return EwfImage(path)
+    if vmdk_mod.looks_like_vmdk(head):
+        try:
+            return vmdk_mod.VmdkImage(path)
+        except vmdk_mod.VmdkError as exc:
+            raise UnsupportedContainer(_t("ewf.vmware_vmdk") % exc.message,
+                                       exc.advice)
+    if ad1_mod.looks_like_ad1(head):
+        try:
+            return ad1_mod.Ad1Image(path)
+        except ad1_mod.Ad1Error as exc:
+            raise UnsupportedContainer(_t("ewf.accessdata_ad1") % exc.message,
+                                       exc.advice)
+    if sig == vhdx_mod.SIGNATURE:
+        try:
+            return vhdx_mod.VhdxImage(path)
+        except vhdx_mod.VhdxError as exc:
+            raise UnsupportedContainer(_t("ewf.hyper_v_vhdx") % exc.message,
+                                       exc.advice)
+    known = identify_unsupported(head)
+    if known:
+        raise UnsupportedContainer(*known)
+    return RawImage(path)
+
+class OffsetReader:
+
+    def __init__(self, source, offset, size, label=""):
+        self.source = source
+        self.offset = offset
+        self.size = size
+        self.label = label
+        self.bytes_per_sector = getattr(source, "bytes_per_sector", 512)
+        self._pos = 0
+
+    def read_at(self, offset, length):
+        # A negative offset is still a positive offset in the image once
+        # self.offset is added, so without this it would quietly return bytes
+        # from whatever lies before this region and present them as ours.
+        if offset < 0 or length <= 0 or offset >= self.size:
+            return b""
+        return self.source.read_at(self.offset + offset,
+                                   min(length, self.size - offset))
+
+    def read(self, n=-1):
+        d = self.read_at(self._pos, self.size - self._pos if n < 0 else n)
+        self._pos += len(d)
+        return d
+
+    def seek(self, off, whence=io.SEEK_SET):
+        if whence == io.SEEK_SET:
+            self._pos = off
+        elif whence == io.SEEK_CUR:
+            self._pos += off
+        else:
+            self._pos = self.size + off
+        return self._pos

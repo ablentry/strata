@@ -1,0 +1,42 @@
+# Evidence, case files and anything derived from them do not belong here.
+*.E01
+*.Ex01
+*.L01
+*.Lx01
+*.S01
+*.aff
+*.aff4
+*.ad1
+*.dd
+*.raw
+*.img
+*.bin
+*.vmdk
+*.vhd
+*.vhdx
+*.[EeLlSs][0-9A-Za-z][0-9A-Za-z]
+*.[0-9][0-9][0-9]
+*.pst
+*.ost
+*.mbox
+*.msg
+*.strata
+/evidence/
+/exports/
+/reports/
+*-report.html
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editors and operating systems
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
