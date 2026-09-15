@@ -8441,16 +8441,44 @@ function applyTheme(name, { save = true } = {}) {
   const theme = THEMES.includes(name) ? name : 'dark';
   document.documentElement.dataset.theme = theme;
   const btn = $('#btn-theme');
-  if (btn) {
-    const toLight = !['light', 'paper'].includes(theme);
-    btn.textContent = txt(toLight ? 'ui.settings.theme_light'
-                                  : 'ui.settings.theme_dark');
-    btn.title = `Switch to the ${toLight ? 'light' : 'dark'} theme`;
-  }
+  if (btn) btn.textContent = txt('ui.settings.theme_' + theme);
+  if ($('#dlg-theme')?.open) renderThemeList();
   hex.draw();
   core.draw();
   timelineGraph?.draw();
   if (save) savePref('theme', theme);
+}
+
+function renderThemeList() {
+  const box = $('#theme-list');
+  const current = document.documentElement.dataset.theme;
+  box.innerHTML = THEMES.map(id => `
+    <div class="theme-item${id === current ? ' is-on' : ''}" data-theme-id="${id}"
+         role="option" aria-selected="${id === current}" tabindex="0">
+      <span class="theme-swatch" data-swatch="${id}" aria-hidden="true"></span>
+      <span class="theme-name">${esc(txt('ui.settings.theme_' + id))}</span>
+      <span class="theme-check" aria-hidden="true">${id === current ? '✓' : ''}</span>
+    </div>`).join('');
+  $$('.theme-item', box).forEach(el => {
+    el.addEventListener('click', () => {
+      applyTheme(el.dataset.themeId);
+      $('#dlg-theme').close();
+    });
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        applyTheme(el.dataset.themeId);
+        $('#dlg-theme').close();
+      }
+    });
+  });
+}
+
+function openThemeDialog() {
+  const dlg = $('#dlg-theme');
+  renderThemeList();
+  dlg.showModal();
+  $(`.theme-item.is-on`, dlg)?.focus();
 }
 
 function settingsDialog() {
@@ -8931,7 +8959,7 @@ $('#dlg-who')?.addEventListener('close', () => {
   const n = $('#who-input').value.trim();
   if (n) setWho(n);
 });
-$('#btn-theme').addEventListener('click', toggleTheme);
+$('#btn-theme').addEventListener('click', openThemeDialog);
 $('#btn-settings')?.addEventListener('click', () => settingsDialog());
 $('#btn-palette').addEventListener('click', openPalette);
 $('#btn-split').addEventListener('click', () => toggleSplit());

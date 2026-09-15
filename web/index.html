@@ -24,7 +24,7 @@
     <button class="ghost" id="btn-audit" hidden data-i18n="ui.app.audit"></button>
     <button class="ghost" id="btn-who" data-i18n-title="tooltips.app.who_work_recorded">
       <span id="who-name" data-i18n="ui.app.who_name"></span></button>
-    <button class="ghost" id="btn-theme" data-i18n-title="tooltips.app.switch_theme" data-i18n="ui.app.theme"></button>
+    <button class="ghost" id="btn-theme" data-i18n-title="tooltips.app.switch_theme" aria-haspopup="dialog" data-i18n="ui.app.theme"></button>
     <button class="ghost" id="btn-settings" data-i18n-title="tooltips.app.settings"
             data-i18n="ui.app.settings"></button>
     <button class="ghost" id="btn-palette"
@@ -801,6 +801,13 @@
       <button value="cancel" class="ghost" data-i18n="ui.settings.close"></button>
     </menu>
   </form>
+</dialog>
+
+<dialog id="dlg-theme">
+  <div class="dlg">
+    <h2 data-i18n="ui.settings.theme"></h2>
+    <div class="theme-list" id="theme-list" role="listbox" data-i18n-aria="ui.settings.theme"></div>
+  </div>
 </dialog>
 
 <dialog id="dlg-picker">
