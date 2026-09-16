@@ -47,25 +47,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      # Listed explicitly rather than as a cross product, because two thirds of
-      # a 6 x 3 grid cannot run: setup-python has no 3.8 build for ubuntu-24.04
-      # or for arm64 macOS, and the macos-13 image that did carry 3.8 has been
-      # retired, so jobs targeting it queue forever rather than failing.
-      # Linux therefore sweeps every supported version and pins the 3.8 floor
-      # to 22.04; Windows covers floor and ceiling; macOS covers what arm64 can
-      # actually install, which is enough to exercise sys.platform == 'darwin'.
       matrix:
-        include:
-          - { os: ubuntu-22.04, python: '3.8' }
-          - { os: ubuntu-latest, python: '3.9' }
-          - { os: ubuntu-latest, python: '3.10' }
-          - { os: ubuntu-latest, python: '3.11' }
-          - { os: ubuntu-latest, python: '3.12' }
-          - { os: ubuntu-latest, python: '3.13' }
-          - { os: windows-latest, python: '3.8' }
-          - { os: windows-latest, python: '3.13' }
-          - { os: macos-latest, python: '3.12' }
-          - { os: macos-latest, python: '3.13' }
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -80,15 +64,11 @@ jobs:
 
   unittest:
     name: Unit tests (Python ${{ matrix.python }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # 3.8 pinned to 22.04 for the same reason as the smoke matrix.
       matrix:
-        include:
-          - { os: ubuntu-22.04, python: '3.8' }
-          - { os: ubuntu-latest, python: '3.12' }
-          - { os: ubuntu-latest, python: '3.13' }
+        python: ["3.8", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
