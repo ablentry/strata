@@ -25,6 +25,7 @@
 /exports/
 /reports/
 *-report.html
+/fuzz-findings/
 
 # Python
 __pycache__/
