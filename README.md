@@ -136,7 +136,7 @@ separate from the tool's suggestions, and never promotes one to the other.
   HTML, SVG or scripts** — active content is removed before rendering and what
   was removed is listed
 - Marks, tags and categories; saved searches; a command palette; keyboard
-  shortcuts; light and dark themes
+  shortcuts; six themes including two high-contrast
 - Offsets can be shown from the start of the image, the volume, or the file
 
 ## Cases
