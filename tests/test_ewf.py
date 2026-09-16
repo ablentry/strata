@@ -1,6 +1,7 @@
 """Unit tests for image containers (engine.ewf): EWF v1 segment sets, raw
 images, split raw sets and OffsetReader, fed files from imagebuild_ewf."""
 
+import gc
 import hashlib
 import io
 import os
@@ -8,6 +9,7 @@ import struct
 import sys
 import tempfile
 import unittest
+import warnings
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -287,6 +289,94 @@ class Robustness(TempDir):
         struct.pack_into("<Q", seg, at + 16, 1 << 40)
         img = self.open(self.write_segments([bytes(seg)]))
         self.assertEqual(img.read_at(0, len(MEDIA)), MEDIA)
+
+
+class HostileSizes(TempDir):
+    """Sizes and offsets in a segment file are untrusted: none of them may
+    decide how much is allocated.  Found by tests/fuzz.py, where each of
+    these raised MemoryError, OverflowError or OSError."""
+
+    HUGE = 1 << 62
+
+    @staticmethod
+    def set_size(seg, type_, size):
+        at = Integrity.find_section(seg, type_)
+        struct.pack_into("<Q", seg, at + 24, size)
+        struct.pack_into("<I", seg, at + 72, build.adler(bytes(seg[at:at + 72])))
+        return at
+
+    def open_mutated(self, seg):
+        return self.open(self.write_segments([bytes(seg)]))
+
+    def assertFinding(self, img, text):
+        self.assertTrue(any(text in f for f in img.findings), img.findings)
+
+    def test_huge_volume_section(self):
+        seg = bytearray(build.build_e01()[0])
+        self.set_size(seg, "volume", self.HUGE)
+        img = self.open_mutated(seg)
+        self.assertFinding(img, "Section 'volume'")
+        self.assertEqual(img.read_at(0, len(MEDIA)), MEDIA)
+
+    def test_huge_header_section(self):
+        seg = bytearray(build.build_e01()[0])
+        self.set_size(seg, "header", self.HUGE)
+        img = self.open_mutated(seg)
+        self.assertFinding(img, "Section 'header'")
+        self.assertEqual(img.info()["acquisition"]["case_number"], "CASE-1")
+
+    def test_huge_hash_section(self):
+        seg = bytearray(build.build_e01()[0])
+        self.set_size(seg, "hash", self.HUGE)
+        img = self.open_mutated(seg)
+        self.assertFinding(img, "Section 'hash'")
+        self.assertEqual(img.stored_md5, hashlib.md5(MEDIA).hexdigest())
+
+    def test_implausible_chunk_geometry(self):
+        seg = bytearray(build.build_e01()[0])
+        at = Integrity.find_section(seg, "volume") + build.DESC
+        struct.pack_into("<II", seg, at + 8, 0xFFFFFFFF, 0xFFFFFFFF)
+        img = self.open_mutated(seg)
+        self.assertFinding(img, "bytes per sector")
+        self.assertFinding(img, "sectors per chunk")
+        self.assertLessEqual(img.chunk_size, ewf.MAX_CHUNK_SIZE)
+        img.read_at(0, len(MEDIA))
+
+    def test_chunk_offset_past_end_of_segment(self):
+        seg = bytearray(build.build_e01()[0])
+        at = Integrity.find_section(seg, "table") + build.DESC
+        struct.pack_into("<Q", seg, at + 8, self.HUGE)
+        struct.pack_into("<I", seg, at + 20, build.adler(bytes(seg[at:at + 20])))
+        img = self.open_mutated(seg)
+        img.read_at(0, len(MEDIA))
+        self.assertFinding(img, "Chunk 0 declares")
+
+    def test_huge_final_chunk(self):
+        # The last chunk's length runs to the end of the sectors section.
+        seg = bytearray(build.build_e01()[0])
+        self.set_size(seg, "sectors", self.HUGE)
+        img = self.open_mutated(seg)
+        self.assertEqual(img.read_at(0, len(MEDIA)), MEDIA)
+        self.assertFinding(img, "Chunk 3 declares")
+
+    def test_section_pointer_past_end_of_segment(self):
+        seg = bytearray(build.build_e01()[0])
+        at = Integrity.find_section(seg, "table2")
+        struct.pack_into("<Q", seg, at + 16, (1 << 64) - 1)
+        struct.pack_into("<I", seg, at + 72, build.adler(bytes(seg[at:at + 72])))
+        img = self.open_mutated(seg)
+        self.assertFinding(img, "past the end of segment")
+        self.assertEqual(img.read_at(0, len(MEDIA)), MEDIA)
+
+    def test_failed_open_releases_the_file(self):
+        path = self.write("g.E01", build.EVF_SIG + bytes(500))
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", ResourceWarning)
+            with self.assertRaises(ewf.EwfError):
+                ewf.EwfImage(path)
+            gc.collect()
+        self.assertEqual([w for w in caught
+                          if issubclass(w.category, ResourceWarning)], [])
 
 
 class Raw(TempDir):
