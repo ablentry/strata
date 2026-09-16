@@ -150,9 +150,7 @@ def run_ewf(data, _dir=[]):
             img.read_at(off, 4096)
         img.verify()
     finally:
-        fh = getattr(img, "_fh", None)
-        if fh:
-            fh.close()
+        img.close()
 
 
 def _seeds_fs():
