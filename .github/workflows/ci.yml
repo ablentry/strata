@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  syntax:
+    name: Syntax checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Byte-compile all Python sources
+        run: python3 -m compileall -q engine run.py
+      - name: Check the web frontend parses
+        run: |
+          node --check web/app.js
+          node --check web/strings.js
+      - name: Check every string file is valid JSON
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, sys
+          bad = []
+          files = sorted(pathlib.Path("web/strings").rglob("*.json"))
+          for p in files:
+              try:
+                  json.loads(p.read_text(encoding="utf-8"))
+              except Exception as exc:
+                  bad.append("%s: %s" % (p, exc))
+          for line in bad:
+              print(line)
+          print("checked %d string files" % len(files))
+          sys.exit(1 if bad else 0)
+          PY
+
+  smoke:
+    name: Smoke test (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      # Per version, not just once: this is what keeps the README's
+      # "Python 3.8 or later" true when newer syntax creeps in.
+      - name: Byte-compile on this version
+        run: python -m compileall -q engine run.py
+      - name: Run the app and exercise it over HTTP
+        run: python tests/smoke.py
+
+  unittest:
+    name: Unit tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.8", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
