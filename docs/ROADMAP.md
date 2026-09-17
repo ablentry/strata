@@ -18,14 +18,8 @@ before anything new.
 
 - [~] **Parsers that return wrong or missing results without a warning**
       ([#19](https://github.com/switch-nz/strata/issues/19)). Still open:
-      sparse ext4 files read back at the wrong offsets; ext4 inline data over
-      60 bytes and inline directories misread; deleted FAT long filenames
-      assembled out of order and FAT slack for deleted files misplaced;
-      contiguous exFAT subdirectories listed only to their first cluster; a
-      truncated compressed EWF chunk returned short without a finding; any
-      three-letter file beside an E01 taken as a segment. exFAT timestamps
-      are converted with a valid recorded offset, but an entry without one is
-      still shown as UTC.
+      exFAT timestamps are converted with a valid recorded offset, but an
+      entry without one is still shown as UTC.
 - [~] **Damaged input that exhausts memory**
       ([#15](https://github.com/switch-nz/strata/issues/15)). The fuzzer's
       findings are fixed; one residual remains — a contiguous exFAT run is
@@ -49,9 +43,10 @@ recognised and refused by name today; these entries are about *reading* it.
 - [ ] **Ex01 / Lx01** (EWF v2) — detected and refused. Same lineage as the
       E01 already read, with a different header and compression framing.
       Cheapest real win of the set.
-- [ ] **Split raw sets** (`.001`, `.002`, …) — join the segments into one
-      exhibit, with a warning when the set looks incomplete. Today only the
-      first segment is read.
+- [~] **Split raw sets** (`.001`, `.002`, …) — joined into one exhibit, with
+      a finding for a missing or wrongly sized piece. Tested only on
+      synthetic sets so far; check against sets written by FTK Imager, `dd`
+      with `split`, and Guymager.
 - [ ] **VHD** (the older `conectix` format, not VHDX) — a fixed VHD is raw
       with a footer appended and nearly free; dynamic and differencing disks
       need their own block allocation table.

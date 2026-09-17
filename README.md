@@ -20,7 +20,7 @@ is a synthetic volume: every byte of it was generated for this screenshot.*
 | Format | Notes |
 |---|---|
 | EWF | `.E01` and `.L01`, including split segment sets |
-| Raw / dd | single-file images; split raw sets are not yet supported |
+| Raw / dd | single-file images and split sets (`.001`, `.002`, …) |
 | VMDK | flat, sparse, and stream-optimized |
 | VHDX | fixed and dynamic; a differencing disk is detected and reported, not merged |
 | AD1 | AccessData logical images |
@@ -153,10 +153,6 @@ separate from the tool's suggestions, and never promotes one to the other.
 EWF v2 (Ex01), FileVault, BitLocker with the Elephant diffuser, LUKS2 with
 Argon2, ANSI PST, `$LogFile`, and carving across fragments. Shadow copies are
 listed but cannot yet be opened.
-
-Split raw sets (`.001`, `.002`, …) are not joined: opening the first segment
-reads that segment alone, and nothing warns that the rest of the disk is
-missing. Join the segments into one file before opening them.
 
 ---
 
