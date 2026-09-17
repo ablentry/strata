@@ -32,6 +32,14 @@ records, not how the code changed.
   pieces in the wrong order — `Removed document.txt` appeared as
   `ent.txtRemoved docum`. The pieces are now joined in the order they belong
   ([#19](https://github.com/switch-nz/strata/issues/19)).
+- **Slack for a deleted FAT file larger than one cluster was reported inside
+  the file.** Deletion frees the file's cluster chain, and slack was worked
+  out from that freed chain, so it pointed into the file's own content rather
+  than past its end; the file's runs likewise showed only its first cluster.
+  Both now follow the clusters the recovered content is read from. Where
+  those clusters run off the end of the volume, or a live file's chain is
+  broken short, no slack is reported, since where the file ends is unknown
+  ([#19](https://github.com/switch-nz/strata/issues/19)).
 
 ## [0.1.2] - 2026-09-17
 

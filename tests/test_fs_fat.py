@@ -287,10 +287,8 @@ class FatDirectoryEntries(unittest.TestCase):
         exact = dict(self.root["HELLO.TXT"], size=C)
         self.assertIsNone(self.fs.slack(exact))
 
-    # Bug: fat.py slack() walks the (freed) FAT chain for deleted files, so it
-    # reports slack inside the first cluster (offset of cluster 12 + 188),
-    # i.e. inside the content read_file() just returned, instead of after it.
-    @unittest.expectedFailure
+    # A deleted file's FAT chain is freed, so slack and runs follow the
+    # contiguous clusters read_file() reads, not the one-cluster chain.
     def test_deleted_multi_cluster_file_slack_follows_its_content(self):
         e = self.root["_ELETED.TXT"]
         tail = build.DELETED_SIZE - C
@@ -298,6 +296,21 @@ class FatDirectoryEntries(unittest.TestCase):
             "offset": self.fs.cluster_offset(L["deleted"]["cluster"] + 1)
             + tail,
             "length": C - tail})
+        got = self.fs.source.read_at(self.fs.slack(e)["offset"], C - tail)
+        self.assertEqual(got, build.fill(C - tail, build.SLACK_MARK))
+
+    def test_no_slack_when_clusters_cannot_hold_the_file(self):
+        last = self.fs.cluster_count + 1
+        cut = dict(self.root["_ELETED.TXT"], start_cluster=last)
+        self.assertIsNone(self.fs.slack(cut))
+        self.assertIsNone(self.fs.slack(dict(cut, start_cluster=last + 5)))
+
+    def test_deleted_multi_cluster_file_runs_cover_its_content(self):
+        e = self.root["_ELETED.TXT"]
+        start = L["deleted"]["cluster"]
+        self.assertEqual(self.fs.stat(e)["runs"], [{
+            "offset": self.fs.cluster_offset(start), "length": 2 * C,
+            "used": build.DELETED_SIZE, "cluster": start, "clusters": 2}])
 
 
 class FatInMbrPartition(unittest.TestCase):
