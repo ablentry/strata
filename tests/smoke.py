@@ -1,7 +1,8 @@
 """Start the application and check that it actually serves.
 
 Exercises the running server rather than importing it: static assets, the
-version endpoint, path-traversal refusal, and the preferences whitelist.
+version endpoint, path-traversal refusal, the preferences whitelist, and that
+previewing or opening a file that is not a case leaves it untouched.
 
     python3 tests/smoke.py [-v]
 
@@ -9,16 +10,19 @@ Preferences are redirected to a temporary directory via STRATA_CONFIG_DIR, so
 running this never touches the preferences of whoever is logged in.
 """
 
+import hashlib
 import http.client
 import json
 import os
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -245,6 +249,53 @@ def run(config_dir, log_path):
                 raise AssertionError("unknown key was stored")
             return "unknown key dropped"
 
+        def non_case_untouched():
+            folder = os.path.join(config_dir, "not-cases")
+            os.makedirs(folder, exist_ok=True)
+            empty = os.path.join(folder, "empty.bin")
+            open(empty, "wb").close()
+            history = os.path.join(folder, "History")
+            db = sqlite3.connect(history)
+            db.execute("CREATE TABLE urls(id INTEGER PRIMARY KEY, url TEXT)")
+            db.commit()
+            db.close()
+
+            def state():
+                out = {}
+                for name in sorted(os.listdir(folder)):
+                    p = os.path.join(folder, name)
+                    if os.path.isdir(p):
+                        out[name] = "<dir>"
+                    else:
+                        with open(p, "rb") as fh:
+                            out[name] = hashlib.sha256(fh.read()).hexdigest()
+                return out
+
+            before = state()
+            for target in (empty, history):
+                name = os.path.basename(target)
+                get(opener, base + "/api/case/peek?"
+                    + urllib.parse.urlencode({"path": target}), want=400)
+                req = urllib.request.Request(
+                    base + "/api/case/open",
+                    data=json.dumps({"path": target,
+                                     "examiner": EXAMINER}).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST")
+                try:
+                    opener.open(req, timeout=20)
+                except urllib.error.HTTPError as exc:
+                    if exc.code != 400:
+                        raise AssertionError(
+                            "opening %s returned %d, expected 400"
+                            % (name, exc.code))
+                else:
+                    raise AssertionError("opening %s as a case succeeded" % name)
+            after = state()
+            if after != before:
+                raise AssertionError("files changed: %r -> %r" % (before, after))
+            return "empty file and SQLite database refused, unchanged"
+
         check("/api/version reports a version", version)
         check("/ serves the app shell", shell)
         check("/app.js is served", asset("/app.js", ("javascript", "ecmascript")))
@@ -258,6 +309,7 @@ def run(config_dir, log_path):
         check("prefs reject a bogus theme", prefs_rejects)
         check("prefs clamp an out-of-range width", prefs_clamps)
         check("prefs drop an unknown key", unknown_key)
+        check("a file that is not a case is left untouched", non_case_untouched)
 
     finally:
         code = stop(proc)

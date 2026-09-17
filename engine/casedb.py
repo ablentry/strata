@@ -5,6 +5,7 @@ import os
 import sqlite3
 import threading
 import time
+from urllib.request import pathname2url
 
 from . import version as version_mod
 from .text import t as _t
@@ -305,7 +306,6 @@ def utcnow():
 DB_NAME = "case.sqlite"
 INDEX_NAME = "content-index.sqlite"
 CACHE_DIR = "cache"
-PENDING_SUFFIX = ".migrating"
 
 def infer_kind(path, fmt):
     if path and os.path.isdir(path):
@@ -315,12 +315,60 @@ def infer_kind(path, fmt):
              _t("logical.format_file"): "file"}
     return known.get(fmt, "image")
 
-def is_case(path):
-    if not path:
+_SQLITE_MAGIC = b"SQLite format 3\x00"
+_CASE_TABLES = ("meta", "evidence", "audit")
+
+class NotACase(ValueError):
+    pass
+
+def _looks_like_case_db(db_file):
+    # Decides from the header and a read-only open, so a file that is not a
+    # case is never written, locked for writing, or given -journal/-wal/-shm
+    # siblings: what gets pointed at here is often evidence.
+    try:
+        with open(db_file, "rb") as fh:
+            header = fh.read(100)
+    except OSError:
         return False
-    if os.path.isdir(path):
-        return os.path.isfile(os.path.join(path, DB_NAME))
-    return os.path.isfile(path)
+    if len(header) < 100 or not header.startswith(_SQLITE_MAGIC):
+        return False
+    if header[18] != 1 or header[19] != 1:
+        # WAL mode. Strata never puts a case in WAL, and reading one would
+        # need a -shm file beside it.
+        return False
+    uri = "file:%s?mode=ro" % pathname2url(os.path.abspath(db_file))
+    try:
+        conn = sqlite3.connect(uri, uri=True)
+    except sqlite3.Error:
+        return False
+    try:
+        tables = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        if not all(t in tables for t in _CASE_TABLES):
+            return False
+        audit_cols = {r[1] for r in conn.execute("PRAGMA table_info(audit)")}
+        return {"prev_hash", "hash"} <= audit_cols
+    except sqlite3.Error:
+        return False
+    finally:
+        conn.close()
+
+def is_case(path):
+    if not path or not os.path.isdir(path):
+        return False
+    return _looks_like_case_db(os.path.join(path, DB_NAME))
+
+def _refuse_if_not_case(path):
+    # A case is a folder. Nothing that already exists at the path is written
+    # to unless it is one — a new case may only go where nothing is, or into
+    # a folder that does not yet hold a case record.
+    if not os.path.exists(path):
+        return
+    if not os.path.isdir(path):
+        raise NotACase(_t("casedb.not_a_case") % path)
+    record = os.path.join(path, DB_NAME)
+    if os.path.lexists(record) and not _looks_like_case_db(record):
+        raise NotACase(_t("casedb.not_a_case") % path)
 
 def db_path(case_path):
     return os.path.join(case_path, DB_NAME)
@@ -331,40 +379,13 @@ def cache_dir(case_path, create=False):
         os.makedirs(d, exist_ok=True)
     return d
 
-class CaseInUse(Exception):
-    pass
-
-def _become_folder(path):
-    pending = path + PENDING_SUFFIX
-    if os.path.isfile(path):
-        if os.path.exists(pending):
-            raise OSError("%s already exists; refusing to overwrite an "
-                          "interrupted migration" % pending)
-        try:
-            os.rename(path, pending)
-        except OSError as exc:
-            raise CaseInUse(
-                _t("casedb.case_in_use") % os.path.basename(path)) from exc
-    if not os.path.isfile(pending):
-        return
-    os.makedirs(path, exist_ok=True)
-    target = os.path.join(path, DB_NAME)
-    if os.path.exists(target):
-        raise OSError("%s already holds a case" % path)
-    os.rename(pending, target)
-
 class Case:
-    def __init__(self, path, name=None, examiner=None, migrate=True):
-        legacy = os.path.isfile(path) or os.path.isfile(path + PENDING_SUFFIX)
-        migrated = False
-        if legacy and migrate:
-            _become_folder(path)
-            legacy, migrated = False, True
+    def __init__(self, path, name=None, examiner=None):
+        _refuse_if_not_case(path)
         self.path = path
-        self.db_path = path if legacy else db_path(path)
+        self.db_path = db_path(path)
         fresh = not os.path.isfile(self.db_path)
-        if not legacy:
-            os.makedirs(path, exist_ok=True)
+        os.makedirs(path, exist_ok=True)
         self.db = sqlite3.connect(self.db_path, check_same_thread=False,
                                   timeout=30.0)
         self.db.row_factory = sqlite3.Row
@@ -391,11 +412,6 @@ class Case:
             self._set("created_by", self.examiner)
             self.log("case.create", {"name": self.get("name"),
                                      "tool": version_mod.label()})
-        elif migrated:
-            self.log("case.migrated", {
-                "from": "single file", "to": os.path.join(
-                    os.path.basename(path), DB_NAME),
-                "note": _t("casedb.migrated")})
         self.db.commit()
 
     def close(self):
@@ -410,8 +426,6 @@ class Case:
         self.index = None
 
     def cache_dir(self, create=False):
-        if self.db_path == self.path:
-            return None
         return cache_dir(self.path, create=create)
 
     def _migrate_evidence_kind(self):
@@ -479,9 +493,6 @@ class Case:
         except sqlite3.Error:
             n = 0
         cache = self.cache_dir(create=True)
-        if not cache:
-            self.db.executescript(FTS_SCHEMA)
-            return
         self.index_db = sqlite3.connect(os.path.join(cache, INDEX_NAME),
                                         check_same_thread=False, timeout=30.0)
         self.index_db.row_factory = sqlite3.Row

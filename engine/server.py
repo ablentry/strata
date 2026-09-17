@@ -981,9 +981,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/case/peek":
             p = self._q("path", "")
             if not p or not casedb_mod.is_case(p):
-                return self._send(400, {"error": _t("server.case_peek.such_case_file") % p})
+                return self._send(400, {"error": _t(
+                    "casedb.not_a_case" if p and os.path.exists(p)
+                    else "server.case_peek.such_case_file") % p})
             try:
-                c = Case(p, migrate=False)
+                c = Case(p)
                 out = c.summary()
                 out["audit_integrity"] = c.verify_audit()
                 c.close()
@@ -1716,8 +1718,8 @@ class Handler(BaseHTTPRequestHandler):
                                               self._claim(s, body),
                                               add=bool(body.get("add")),
                                               logical=want_logical))
-            except casedb_mod.CaseInUse as exc:
-                return self._send(409, {"error": str(exc)})
+            except casedb_mod.NotACase as exc:
+                return self._send(400, {"error": str(exc)})
             except ewf_mod.UnsupportedContainer as exc:
                 return self._send(400, {
                     "error": _t("server.open.read_by_strata") % exc.format,
@@ -1975,16 +1977,16 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/case/open":
             cp = body.get("path")
             if not cp or not casedb_mod.is_case(cp):
-                return self._send(400, {"error": _t("server.case_peek.such_case_file") % cp})
+                return self._send(400, {"error": _t(
+                    "casedb.not_a_case" if cp and os.path.exists(cp)
+                    else "server.case_peek.such_case_file") % cp})
             who = self._claim(s, body)
             if s.running_tasks():
                 return self._send(409, self._tasks_busy(s, "open another case"))
             try:
-                peek = Case(cp, migrate=False)
+                peek = Case(cp)
                 items = peek.summary()["evidence"]
                 peek.close()
-            except casedb_mod.CaseInUse as exc:
-                return self._send(409, {"error": str(exc)})
             except Exception as exc:
                 return self._send(400, {"error": _t("server.case_peek.strata_case_file") % exc})
             if not items:
