@@ -11,7 +11,7 @@ records, not how the code changed.
 
 ## [Unreleased]
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-09-17
 
 The first release. Everything is described in the [README](README.md). In
 brief:
