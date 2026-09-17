@@ -13,6 +13,13 @@ records, not how the code changed.
 
 ### Fixed
 
+- exFAT timestamps were shifted by the time zone of the device that wrote
+  them. An exFAT entry records local time together with that device's UTC
+  offset, and the offset was ignored, so local time was shown as UTC. Times
+  are now converted to UTC using the recorded offset. An entry that records
+  no valid offset is still shown unadjusted and labelled UTC: treat those
+  times as the device's local time
+  ([#19](https://github.com/switch-nz/strata/issues/19)).
 - An ext2, ext3 or ext4 volume whose journal is missing or damaged no longer
   raises an error when a deleted file's details or content are read, or when a
   file's journal history is asked for. It reports that no history was
