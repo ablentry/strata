@@ -40,6 +40,12 @@ records, not how the code changed.
   those clusters run off the end of the volume, or a live file's chain is
   broken short, no slack is reported, since where the file ends is unknown
   ([#19](https://github.com/switch-nz/strata/issues/19)).
+- **Files in an exFAT directory spanning several clusters could be missing.**
+  A directory whose clusters are stored contiguously, without a FAT chain,
+  was listed from its first cluster only, so anything recorded in its later
+  clusters was not shown, searched or put on the timeline. Such a directory
+  is now read in full
+  ([#19](https://github.com/switch-nz/strata/issues/19)).
 
 ## [0.1.2] - 2026-09-17
 
