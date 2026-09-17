@@ -1991,6 +1991,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, {"error": _t("server.case_peek.strata_case_file") % exc})
             if not items:
                 return self._send(200, s.open_case(cp, who))
+            want = body.get("evidence_path")
             wanted = [want] if want else [i["path"] for i in items]
 
             kinds = {i["path"]: (i.get("kind")
