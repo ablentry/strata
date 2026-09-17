@@ -18,7 +18,7 @@ jobs:
     name: Syntax checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Byte-compile all Python sources
         run: python3 -m compileall -q engine run.py
       - name: Check the web frontend parses
@@ -51,8 +51,8 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       # Per version, not just once: this is what keeps the README's
@@ -70,8 +70,8 @@ jobs:
       matrix:
         python: ["3.8", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       - name: Run unit tests
