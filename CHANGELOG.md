@@ -79,6 +79,15 @@ records, not how the code changed.
   keys and values from one cut short part-way through its data stops at the
   end of what is there
   ([#19](https://github.com/switch-nz/strata/issues/19)).
+- **A truncated or damaged chunk in an AD1 file shifted every chunk after
+  it.** AD1 stores a file's content in fixed-size compressed chunks, and a
+  chunk that decompressed to less than its full size, or not at all, was
+  appended as-is or served as its own raw compressed bytes, so every later
+  chunk's data landed at the wrong offset, and hashing carried the same
+  fault. Each chunk now keeps its own place: a chunk that could not be fully
+  recovered is reported and the gap reads as zeros, without moving anything
+  after it
+  ([#19](https://github.com/switch-nz/strata/issues/19)).
 - **A damaged or hostile VMDK could hang or exhaust memory opening it.** A
   handful of header and grain-table fields — the descriptor's location, the
   grain size, the number of entries per grain table, and a compressed
