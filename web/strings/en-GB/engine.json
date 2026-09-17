@@ -4,6 +4,8 @@
   "ad1.chunk_table_r_runs": "The chunk table for %r runs past the end of the image.",
   "ad1.first_source_root_object": "The first source's root object is missing.",
   "ad1.image_declares_sources": "The image declares no sources.",
+  "ad1.logical_image_header_runs_past": "The logical image header at offset 0x%X is cut short before its own fields end.",
+  "ad1.segment_header_runs_past": "The segment header is cut short before its own fields end.",
   "ad1.image_says_d_segments": "The image says it has %d segments and %d were found beside it (%s). A missing segment does not read as an error further in — it reads as files that end early and hash to the wrong value.",
   "ad1.object_r_declares_d": "Object %r declares %d chunks for %d bytes, which cannot be right.",
   "ad1.segment_d_d_open": "This is segment %d of %d. Open the first segment; the rest are found beside it.",

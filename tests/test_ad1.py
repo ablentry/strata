@@ -3,6 +3,7 @@ fed a single-segment image from imagebuild_ad1."""
 
 import hashlib
 import os
+import struct
 import sys
 import tempfile
 import unittest
@@ -68,6 +69,69 @@ class Container(Ad1Case):
         data, _ = build.build_ad1()
         with self.assertRaises(ad1.Ad1Error):
             ad1.Ad1(ewf.OffsetReader(_Bytes(b"X" + data[1:]), 0, len(data)))
+
+
+class TruncatedHeaders(Ad1Case):
+    """Found while fuzzing engine.ad1 after #88: a header that carries the
+    right magic but is cut short before its own fields end raised
+    struct.error -- not a clean exception the fuzz harness recognises as
+    "this input is bad" -- instead of being refused."""
+
+    def test_truncated_segment_header_is_refused(self):
+        data, _ = build.build_ad1()
+        # Past the 16-byte magic ad1.Ad1Segments checks, short of the 0x2C
+        # bytes its fields need.
+        path = os.path.join(self._tmp.name, "short.ad1")
+        with open(path, "wb") as fh:
+            fh.write(data[:32])
+        with self.assertRaises(ewf.UnsupportedContainer):
+            ewf.open_image(path)
+
+    def test_truncated_logical_image_header_is_refused(self):
+        data, _ = build.build_ad1()
+        # The segment header (0x200 bytes) is intact; the logical image
+        # header past it is cut short before its own fields end.
+        path = os.path.join(self._tmp.name, "short2.ad1")
+        with open(path, "wb") as fh:
+            fh.write(data[:build.SEGMENT_HEADER + 32])
+        with self.assertRaises(ewf.UnsupportedContainer):
+            ewf.open_image(path)
+
+
+class ChunkSize(Ad1Case):
+    """chunk_size is an unbounded 32-bit field, read once and then used to
+    size a zero-fill for every chunk that fails to decompress
+    (Ad1._decompress_chunk). Found by fuzzing: an implausible value there is
+    a multi-gigabyte allocation from one damaged chunk."""
+
+    @staticmethod
+    def patch_chunk_size(data, value):
+        data = bytearray(data)
+        struct.pack_into("<I", data, build.SEGMENT_HEADER + 0x18, value)
+        return bytes(data)
+
+    def test_huge_chunk_size_is_bounded(self):
+        data, _ = build.build_ad1()
+        data = self.patch_chunk_size(data, 0xFFFFFFFF)
+        path = os.path.join(self._tmp.name, "huge.ad1")
+        with open(path, "wb") as fh:
+            fh.write(data)
+        got = ewf.open_image(path)
+        self.addCleanup(got.close)
+        image = ad1.Ad1(got)
+        self.assertLessEqual(image.chunk_size, 1 << 26)
+        self.assertTrue(any("implausible" in f for f in image.findings))
+
+    def test_zero_chunk_size_is_bounded(self):
+        data, _ = build.build_ad1()
+        data = self.patch_chunk_size(data, 0)
+        path = os.path.join(self._tmp.name, "zero.ad1")
+        with open(path, "wb") as fh:
+            fh.write(data)
+        got = ewf.open_image(path)
+        self.addCleanup(got.close)
+        image = ad1.Ad1(got)
+        self.assertGreaterEqual(image.chunk_size, 1)
 
 
 class Tree(Ad1Case):
