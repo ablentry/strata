@@ -53,6 +53,12 @@ records, not how the code changed.
   file read back wrong and hashed wrong, and an inline directory's entries
   were not listed. Both are now read from where ext4 stores them
   ([#19](https://github.com/switch-nz/strata/issues/19)).
+- **A file beside an E01 could stop the image opening.** Any file with the
+  same name and a three-letter extension, such as `case.txt` next to
+  `case.E01`, was taken as one of the image's segments. A lettered name only
+  counts as a segment now once the set reaches `.E99`, the point where EWF
+  moves on to lettered names, and only if the file is an EWF segment
+  ([#19](https://github.com/switch-nz/strata/issues/19)).
 
 ## [0.1.2] - 2026-09-17
 
