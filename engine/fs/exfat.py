@@ -60,6 +60,7 @@ class ExfatFS:
         self.label = ""
         self._bitmap_start = None
         self._bitmap_size = 0
+        self.findings = []
         self._scan_root_metadata()
 
     def cluster_offset(self, n):
@@ -83,6 +84,13 @@ class ExfatFS:
         if contiguous:
             n = max(1, (size + self.cluster_size - 1) // self.cluster_size) \
                 if size else 1
+            limit = max(0, self.cluster_count + 2 - start)
+            if n > limit:
+                msg = ("Contiguous run from cluster %d truncated at "
+                       "cluster heap end." % start)
+                if msg not in self.findings:
+                    self.findings.append(msg)
+                n = limit
             return list(range(start, start + n))
         out, seen, c = [], set(), start
         while 2 <= c < self.cluster_count + 2 and c not in seen:
@@ -300,6 +308,7 @@ class ExfatFS:
             "revision": "%d.%d" % (self.revision >> 8, self.revision & 0xFF),
             "percent_in_use": self.percent_in_use,
             "volume_dirty": self.dirty,
+            "findings": self.findings,
         }
 
     def allocated_extents(self):
