@@ -11,6 +11,14 @@ records, not how the code changed.
 
 ## [Unreleased]
 
+### Fixed
+
+- An ext2, ext3 or ext4 volume whose journal is missing or damaged no longer
+  raises an error when a deleted file's details or content are read, or when a
+  file's journal history is asked for. It reports that no history was
+  recovered instead
+  ([#15](https://github.com/switch-nz/strata/issues/15)).
+
 ## [0.1.1] - 2026-09-17
 
 A security and evidence-integrity release. Upgrade from 0.1.0.
