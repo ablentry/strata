@@ -18,8 +18,12 @@ brief:
 
 ### Evidence
 
-- EWF (`.E01`, `.L01`) including split segment sets; raw/dd; VMDK (flat,
-  sparse and stream-optimized); VHDX (fixed and dynamic); AccessData AD1.
+- EWF (`.E01`, `.L01`) including split segment sets; single-file raw/dd;
+  VMDK (flat, sparse and stream-optimized); VHDX (fixed and dynamic);
+  AccessData AD1.
+- Size and offset fields in EWF segment files are bounded, so a damaged
+  image records a finding instead of exhausting memory
+  ([#14](https://github.com/switch-nz/strata/pull/14)).
 - Logical evidence: a folder, a zip or a single file opened as an exhibit.
 - MBR and GPT volume layout, including damaged tables and the gaps between
   partitions.
@@ -33,6 +37,9 @@ brief:
 - NTFS, FAT12/16/32, exFAT, ext2/3/4 with jbd2 journal recovery, APFS and
   HFS+/HFSX, parsed directly, with deleted entries, file slack and
   unallocated space reachable throughout.
+- A contiguous exFAT run that claims more than the cluster heap holds is cut
+  off at its end, with a finding
+  ([#17](https://github.com/switch-nz/strata/pull/17)).
 
 ### Analysis
 
@@ -64,17 +71,40 @@ brief:
 - CI on Linux, Windows and macOS across Python 3.8 to 3.13, with unit tests
   and a smoke test of the running app; `SECURITY.md`, `CONTRIBUTING.md` and
   issue templates ([#12](https://github.com/switch-nz/strata/pull/12)).
+- Parser tests built from synthetic images, mutation fuzzing of the parsers,
+  tests of the request gate, and CodeQL
+  ([#13](https://github.com/switch-nz/strata/pull/13)).
 
 ### Not implemented
 
-EWF v2 (Ex01), FileVault, BitLocker with the Elephant diffuser, LUKS2 with
-Argon2, ANSI PST, `$LogFile`, carving across fragments, and opening shadow
-copies (they are listed only).
+EWF v2 (Ex01), split raw sets, FileVault, BitLocker with the Elephant
+diffuser, LUKS2 with Argon2, ANSI PST, `$LogFile`, carving across fragments,
+and opening shadow copies (they are listed only).
 
 ### Known issues
 
-- Parser defects found by fuzzing are tracked in
-  [#15](https://github.com/switch-nz/strata/issues/15).
+Corroborate results in these areas with another tool before relying on them.
+
+- **Some parsers return wrong or missing results without a warning**
+  ([#19](https://github.com/switch-nz/strata/issues/19)):
+  - exFAT timestamps ignore the recorded UTC offset but are labelled UTC.
+  - Files in the later clusters of a contiguous exFAT directory are not
+    listed.
+  - Sparse ext4 files read back with their data at the wrong offsets; ext4
+    inline files over 60 bytes, and inline directories, are misread.
+  - Deleted FAT long filenames made of several parts are assembled out of
+    order, and slack for a deleted multi-cluster FAT file is reported in the
+    wrong place.
+  - A truncated compressed EWF chunk is returned short, without a finding.
+  - Opening the first segment of a split raw set reads that segment alone,
+    with nothing to say the rest of the disk is missing. Join the segments
+    first.
+- A file with a three-letter extension beside an EWF image, such as
+  `case.txt` next to `case.E01`, is taken as a segment and stops the image
+  opening ([#19](https://github.com/switch-nz/strata/issues/19)).
+- Some damaged images crash or hang a parser instead of recording a finding
+  ([#15](https://github.com/switch-nz/strata/issues/15),
+  [#19](https://github.com/switch-nz/strata/issues/19)).
 
 [Unreleased]: https://github.com/switch-nz/strata/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/switch-nz/strata/releases/tag/v0.1.0
