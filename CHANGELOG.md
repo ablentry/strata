@@ -11,6 +11,15 @@ records, not how the code changed.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Sparse ext4 files read back wrong.** Where a file had a hole — a range
+  never written, which reads as zeros — the data after the hole was shifted
+  back into it and the end of the file was missing, so both the content and
+  its hash were wrong. Holes now read as zeros in place, including a hole at
+  the end of a file
+  ([#19](https://github.com/switch-nz/strata/issues/19)).
+
 ## [0.1.2] - 2026-09-17
 
 A correctness release: exFAT timestamps, and damaged ext, NTFS and exFAT

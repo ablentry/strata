@@ -257,14 +257,30 @@ class Ext4FS:
                     blocks.append(b)
         return blocks
 
+    def _hole(self, logical, count):
+        return {"offset": 0, "length": count * self.block_size,
+                "block": 0, "blocks": count, "logical": logical,
+                "sparse": True, "initialised": True}
+
     def runs(self, ino):
         if ino.inline:
             return []
         out = []
         if ino.uses_extents:
+            if ino.block_area[0:2] != b"\x0A\xF3":
+                return []
             ext = self._extent_runs(ino.block_area)
             ext.sort()
+            # Extents only cover what was written, and every reader walks
+            # the runs end to end, so a gap in logical block numbers has to
+            # become an explicit hole or later data shifts down into it.
+            # Directories are never sparse in ext4, and listing reads them
+            # whole, so a hole there is corruption and is not filled.
+            holes = not ino.is_dir
+            expected = 0
             for logical, phys, count, initialised in ext:
+                if holes and logical > expected:
+                    out.append(self._hole(expected, logical - expected))
                 out.append({
                     "offset": phys * self.block_size,
                     "length": count * self.block_size,
@@ -272,6 +288,10 @@ class Ext4FS:
                     "logical": logical, "sparse": False,
                     "initialised": initialised,
                 })
+                expected = max(expected, logical + count)
+            size_blocks = (ino.size + self.block_size - 1) // self.block_size
+            if holes and size_blocks > expected:
+                out.append(self._hole(expected, size_blocks - expected))
         else:
             needed = (ino.size + self.block_size - 1) // self.block_size
             blocks = self._indirect_blocks(ino.block_area, needed)
@@ -409,8 +429,8 @@ class Ext4FS:
         if runs:
             info["runs"] = runs
             tail = ino.size % self.block_size
-            if tail:
-                last = runs[-1]
+            last = runs[-1]
+            if tail and not last["sparse"]:
                 info["slack"] = {
                     "offset": last["offset"] + last["length"]
                     - (self.block_size - tail),
