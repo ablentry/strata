@@ -231,9 +231,9 @@ class FatDirectoryEntries(unittest.TestCase):
     def test_timestamps(self):
         e = self.root["HELLO.TXT"]
         # 10:20:30 plus a 10 ms-resolution byte of 150 -> 31 s.
-        self.assertEqual(e["created"], "2024-03-15T10:20:31Z")
-        self.assertEqual(e["modified"], "2024-03-15T13:45:30Z")
-        self.assertEqual(e["accessed"], "2024-03-16T00:00:00Z")
+        self.assertEqual(e["created"], "2024-03-15T10:20:31")
+        self.assertEqual(e["modified"], "2024-03-15T13:45:30")
+        self.assertEqual(e["accessed"], "2024-03-16T00:00:00")
         self.assertIsNone(self.root["CYCLE.BIN"]["modified"])
 
     def test_attributes(self):

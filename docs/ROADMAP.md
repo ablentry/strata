@@ -18,8 +18,8 @@ before anything new.
 
 - [~] **Parsers that return wrong or missing results without a warning**
       ([#19](https://github.com/switch-nz/strata/issues/19)). Still open:
-      exFAT timestamps are converted with a valid recorded offset, but an
-      entry without one is still shown as UTC.
+      a truncated compressed stream in a VMDK or AD1 may be returned short
+      without a finding, as an E01 chunk was; there are no test images yet.
 - [~] **Damaged input that exhausts memory**
       ([#15](https://github.com/switch-nz/strata/issues/15)). The fuzzer's
       findings are fixed; one residual remains — a contiguous exFAT run is

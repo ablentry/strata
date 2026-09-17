@@ -72,6 +72,9 @@ const fmt = {
   },
   time(t) {
     if (!t) return '—';
+    // Recorded with no zone (FAT, DOS times, exFAT without an offset): shown
+    // as-is, neither labelled UTC nor converted to the display zone.
+    if (!hasZone(t)) return t.replace('T', ' ');
     const utc = t.replace('T', ' ').replace('Z', '');
     if (!S.tz || timeDisplay === 'utc') return utc + ' UTC';
     const local = fmt.localOf(t);
@@ -82,13 +85,17 @@ const fmt = {
   },
   count(n) { return Number(n || 0).toLocaleString(); },
   localOf(t) {
-    if (!S.tz || !t) return null;
+    if (!S.tz || !t || !hasZone(t)) return null;
     const d = new Date(t.endsWith('Z') ? t : t + 'Z');
     if (isNaN(d)) return null;
     const shifted = new Date(d.getTime() + tzOffsetAt(S.tz, d) * 60000);
     return shifted.toISOString().replace('T', ' ').replace(/\.\d+Z$|Z$/, '');
   },
 };
+
+function hasZone(t) {
+  return /(Z|[+-]\d\d:\d\d)$/.test(String(t));
+}
 
 const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 

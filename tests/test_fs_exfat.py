@@ -116,8 +116,9 @@ class Exfat(unittest.TestCase):
 
     def test_timestamps_and_attributes(self):
         e = self.root["Hello.txt"]
-        self.assertEqual(e["modified"], "2023-11-05T08:30:44Z")
-        self.assertEqual(e["accessed"], "2023-11-05T08:30:44Z")
+        # Hello.txt records no valid UTC offset, so no zone is claimed.
+        self.assertEqual(e["modified"], "2023-11-05T08:30:44")
+        self.assertEqual(e["accessed"], "2023-11-05T08:30:44")
         self.assertEqual(e["attributes"], ["archive"])
 
     # The offset bytes (spec 7.4.10) now shift the local timestamp into UTC:
