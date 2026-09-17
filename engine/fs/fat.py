@@ -129,8 +129,21 @@ class FatFS:
             c = nxt
         return out
 
-    def runs(self, start_cluster, size):
-        clusters = self.chain(start_cluster)
+    def _contiguous(self, start, size):
+        # A deleted file's chain is released, so its clusters are assumed to
+        # follow the start cluster, as read_file() reads them.
+        need = max(1, (size + self.cluster_size - 1) // self.cluster_size)
+        end = min(start + need, self.cluster_count + 2)
+        return list(range(start, end)) if 2 <= start < end else []
+
+    def _clusters(self, entry):
+        if entry.get("deleted"):
+            return self._contiguous(entry["start_cluster"], entry["size"])
+        return self.chain(entry["start_cluster"])
+
+    def runs(self, start_cluster, size, clusters=None):
+        if clusters is None:
+            clusters = self.chain(start_cluster)
         if not clusters:
             return []
         runs, run_start, run_len = [], clusters[0], 1
@@ -260,9 +273,9 @@ class FatFS:
     def slack(self, entry):
         if entry["is_dir"] or not entry["start_cluster"] or not entry["size"]:
             return None
-        clusters = self.chain(entry["start_cluster"])
-        if not clusters:
-            return None
+        clusters = self._clusters(entry)
+        if len(clusters) * self.cluster_size < entry["size"]:
+            return None   # cut short: the file's end, and its slack, is unknown
         used_in_last = entry["size"] % self.cluster_size
         if used_in_last == 0:
             return None
@@ -275,7 +288,8 @@ class FatFS:
         if entry["is_dir"] and entry.get("start_cluster"):
             info["record_offset"] = self.cluster_offset(entry["start_cluster"])
         if not entry["is_dir"] and entry["start_cluster"]:
-            info["runs"] = self.runs(entry["start_cluster"], entry["size"])
+            info["runs"] = self.runs(entry["start_cluster"], entry["size"],
+                                     self._clusters(entry))
             info["slack"] = self.slack(entry)
             if entry.get("deleted"):
                 info["recovery"] = ("FAT chain released. Content assumed "
