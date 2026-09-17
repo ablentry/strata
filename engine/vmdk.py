@@ -61,6 +61,25 @@ def parse_descriptor(text):
         out["ddb"][k] = v
     return out
 
+def _extent_beside(descriptor_path, name):
+    # The name comes from the evidence. It is judged as text before anything
+    # touches the filesystem, because even os.path.exists() on a UNC name
+    # reaches the network. An extent must sit directly beside its descriptor
+    # and not be a symlink (checked with lstat, which never follows one).
+    # None when the name would lead anywhere else.
+    if not name or "\x00" in name:
+        return None
+    if (os.path.isabs(name) or os.path.splitdrive(name)[0]
+            or name.startswith(("/", "\\"))):
+        return None
+    base = os.path.dirname(os.path.abspath(descriptor_path))
+    target = os.path.normpath(os.path.join(base, name))
+    if os.path.normcase(os.path.dirname(target)) != os.path.normcase(base):
+        return None
+    if os.path.islink(target):
+        return None
+    return target
+
 def _read_header(fh, at):
     fh.seek(at)
     raw = fh.read(SECTOR)
@@ -203,8 +222,13 @@ class VmdkImage:
                 "Concatenate them, or convert the set with qemu-img.")
 
         ext = usable[0]
-        base = os.path.dirname(os.path.abspath(self.path))
-        target = os.path.join(base, ext["file"] or "")
+        target = _extent_beside(self.path, ext["file"])
+        if ext["file"] and target is None:
+            raise VmdkError(
+                _t("vmdk.extent_outside_folder") % ext["file"],
+                "A flat extent is read only from the descriptor's own folder. "
+                "Put the -flat file beside the descriptor and open it again; "
+                "a descriptor that points elsewhere may have been altered.")
         if not ext["file"] or not os.path.exists(target):
             raise VmdkError(
                 _t("vmdk.vmdk_descriptor_names_r")

@@ -254,6 +254,7 @@
   "vhdx.vhdx_region_table_names": "The VHDX region table names no %s region.",
   "vhdx.vhdx_stores_acquisition_hash": "A VHDX stores no acquisition hash, so there is nothing to verify this against. The digests above are of the disk as presented now.",
   "vmdk.differencing_vmdk_holds_only": "This is a differencing VMDK: it holds only what changed from a parent disk.",
+  "vmdk.extent_outside_folder": "This VMDK descriptor names its data as %r, which is outside the descriptor's own folder, so Strata did not follow it.",
   "vmdk.file_starts_kdmv_but": "This file starts with KDMV but its header will not parse.",
   "vmdk.grain_directory_runs_past": "The grain directory runs past the end of the file; this VMDK is truncated.",
   "vmdk.implausible_vmdk_grain_size": "Implausible VMDK grain size: %d sectors",
