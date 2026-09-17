@@ -27,6 +27,11 @@ records, not how the code changed.
   everything after it stays at the right offset. A chunk whose compressed data
   is complete but missing its checksum is reported as unverified
   ([#19](https://github.com/switch-nz/strata/issues/19)).
+- **Deleted FAT long filenames were assembled out of order.** A deleted file
+  whose long name spans more than one directory entry was shown with the
+  pieces in the wrong order — `Removed document.txt` appeared as
+  `ent.txtRemoved docum`. The pieces are now joined in the order they belong
+  ([#19](https://github.com/switch-nz/strata/issues/19)).
 
 ## [0.1.2] - 2026-09-17
 
