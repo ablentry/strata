@@ -11,6 +11,11 @@ records, not how the code changed.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-17
+
+A correctness release: exFAT timestamps, and damaged ext, NTFS and exFAT
+volumes that could stop an examination. Upgrade from 0.1.1.
+
 ### Fixed
 
 - exFAT timestamps were shifted by the time zone of the device that wrote
@@ -35,6 +40,15 @@ records, not how the code changed.
   holds is read using what the image actually holds, with a finding, so a
   damaged boot sector can no longer exhaust memory
   ([#15](https://github.com/switch-nz/strata/issues/15)).
+
+### Known issues
+
+The known issues listed for 0.1.0 still apply, with two changes: exFAT
+timestamps are now converted wherever the entry records a valid offset, and
+the crashes and hangs tracked in
+[#15](https://github.com/switch-nz/strata/issues/15) are fixed. Two registry
+crashes on truncated hives remain
+([#19](https://github.com/switch-nz/strata/issues/19)).
 
 ## [0.1.1] - 2026-09-17
 
@@ -162,6 +176,7 @@ Corroborate results in these areas with another tool before relying on them.
   ([#15](https://github.com/switch-nz/strata/issues/15),
   [#19](https://github.com/switch-nz/strata/issues/19)).
 
-[Unreleased]: https://github.com/switch-nz/strata/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/switch-nz/strata/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/switch-nz/strata/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/switch-nz/strata/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/switch-nz/strata/releases/tag/v0.1.0
