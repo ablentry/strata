@@ -177,7 +177,7 @@ class FatFS:
                 seq = e[0]
                 part = (e[1:11] + e[14:26] + e[28:32]).decode("utf-16-le", "replace")
                 part = part.split("\uffff")[0].split("\x00")[0]
-                lfn.append((seq & 0x3F, part))
+                lfn.append((seq, part))
                 continue
             deleted = e[0] == 0xE5
             short = e[0:8].decode("latin-1").rstrip()
@@ -187,7 +187,15 @@ class FatFS:
             sname = short + ("." + ext if ext else "")
             long_name = ""
             if lfn:
-                long_name = "".join(p for _, p in sorted(lfn, key=lambda x: x[0]))
+                if any(seq == 0xE5 for seq, _ in lfn):
+                    # Deletion overwrites every sequence byte with 0xE5, so
+                    # order comes from the layout instead: VFAT stores the
+                    # parts last-first, immediately before the short entry.
+                    parts = [p for _, p in reversed(lfn)]
+                else:
+                    parts = [p for _, p in sorted(lfn,
+                                                  key=lambda x: x[0] & 0x3F)]
+                long_name = "".join(parts)
             lfn = []
             if sname in (".", "..") or attr & 0x08:
                 continue

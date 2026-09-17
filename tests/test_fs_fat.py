@@ -266,10 +266,8 @@ class FatDirectoryEntries(unittest.TestCase):
         self.assertEqual(self.fs.read_file(by_short["_EMOVE~1.TXT"]),
                          build.deleted_lfn_content())
 
-    # Bug: fat.py sorts LFN parts by (seq & 0x3F), but deletion overwrites
-    # every sequence byte with 0xE5, so multi-part deleted names come out in
-    # on-disk (reverse) order: "ent.txtRemoved docum".
-    @unittest.expectedFailure
+    # Deletion overwrites every LFN sequence byte with 0xE5, so a multi-part
+    # deleted name has to be assembled from on-disk order, not sequence.
     def test_deleted_multi_part_lfn_is_in_order(self):
         names = {e["name"] for e in self.entries if e["deleted"]}
         self.assertIn(build.DELETED_LFN_NAME, names)
