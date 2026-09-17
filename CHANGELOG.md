@@ -18,6 +18,11 @@ records, not how the code changed.
   file's journal history is asked for. It reports that no history was
   recovered instead
   ([#15](https://github.com/switch-nz/strata/issues/15)).
+- exFAT timestamps now honour the UTC offset each directory entry records
+  (in 15-minute units, as set by the device that wrote the exhibit).
+  Earlier the local time recorded on the device was presented as if it were
+  UTC, shifting every stamped time by the device's zone offset
+  ([#19](https://github.com/switch-nz/strata/issues/19)).
 
 ## [0.1.1] - 2026-09-17
 

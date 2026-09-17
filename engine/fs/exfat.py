@@ -12,6 +12,10 @@ ENTRY_NAME = 0xC1
 IN_USE = 0x80
 
 def _ts(packed, tenths=0, tz=0):
+    """Decode a DOS-style timestamp. ``tz`` is the entry's UtcOffset byte
+    (spec 7.4.10): bit 7 OffsetValid, bits 0-6 a signed offset in 15-minute
+    units, signed-decimal per Table 31 (0x01 = +00:15, 0x7F = -00:15).  The
+    timestamp is local time; the honest UTC rendering subtracts it."""
     if not packed:
         return None
     try:
@@ -21,7 +25,11 @@ def _ts(packed, tenths=0, tz=0):
         h = (packed >> 11) & 0x1F
         mi = (packed >> 5) & 0x3F
         s = (packed & 0x1F) * 2 + tenths // 100
-        return datetime.datetime(y, mo, d, h, mi, min(s, 59)).isoformat() + "Z"
+        dt = datetime.datetime(y, mo, d, h, mi, min(s, 59))
+        if tz & 0x80:
+            dt -= datetime.timedelta(minutes=(tz & 0x40 and (tz & 0x3F) - 64
+                                              or (tz & 0x3F)) * 15)
+        return dt.isoformat() + "Z"
     except ValueError:
         return None
 
@@ -154,9 +162,9 @@ class ExfatFS:
             deleted = not (t & IN_USE)
             secondary = e[1]
             attrs = struct.unpack("<H", e[4:6])[0]
-            created = _ts(struct.unpack("<I", e[8:12])[0], e[20])
-            modified = _ts(struct.unpack("<I", e[12:16])[0], e[21])
-            accessed = _ts(struct.unpack("<I", e[16:20])[0])
+            created = _ts(struct.unpack("<I", e[8:12])[0], e[20], e[22])
+            modified = _ts(struct.unpack("<I", e[12:16])[0], e[21], e[23])
+            accessed = _ts(struct.unpack("<I", e[16:20])[0], tz=e[24])
 
             stream = None
             name_parts = []

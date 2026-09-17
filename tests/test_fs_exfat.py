@@ -120,10 +120,8 @@ class Exfat(unittest.TestCase):
         self.assertEqual(e["accessed"], "2023-11-05T08:30:44Z")
         self.assertEqual(e["attributes"], ["archive"])
 
-    # Bug: exfat.py ignores the UTC-offset bytes (22-24) — _ts() takes a tz
-    # argument but never uses it — yet labels local times "Z". 10:00 at
-    # +12:00 is 22:00 UTC the previous day.
-    @unittest.expectedFailure
+    # The offset bytes (spec 7.4.10) now shift the local timestamp into UTC:
+    # 10:00 at +12:00 is 22:00 UTC the previous day.
     def test_timestamp_honours_utc_offset(self):
         self.assertEqual(self.root["Timezone.txt"]["created"],
                          "2024-05-31T22:00:00Z")
