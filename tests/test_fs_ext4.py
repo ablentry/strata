@@ -153,13 +153,25 @@ class Directories(Ext4Fixture):
     def test_listdir_of_a_file_is_empty(self):
         self.assertEqual(self.fs.listdir(build.INO_EXTENT), [])
 
-    # Engine bug: engine/fs/ext4.py:311 _dir_entries parses an inline-data
-    # directory as ordinary dirents, ignoring its 4-byte parent-inode prefix.
-    @unittest.expectedFailure
+    # An inline directory's i_block opens with a 4-byte parent inode number.
     def test_inline_directory(self):
         entries = self.fs.listdir(build.INO_INLINEDIR, "/inlinedir")
         self.assertEqual([(e["name"], e["inode"]) for e in entries],
                          [("again.txt", build.INO_EXTENT)])
+
+    def test_inline_directory_spilling_into_xattr(self):
+        head = struct.pack("<I", build.INO_ROOT) + build.dir_block(
+            [(build.INO_EXTENT, "again.txt", 1)], size=56)
+        more = build.dir_block([(build.INO_LEGACY, "legacy.txt", 1),
+                                (build.INO_INLINE, "inline.txt", 1)], size=40)
+        raw = build.inode_bytes(
+            build.S_IFDIR | 0o755, 60 + len(more), head, build.FL_INLINE_DATA,
+            links=2, xattr=build.inline_data_xattr(more))
+        ino = ext4.Inode(99, raw, self.fs)
+        self.assertEqual([(n, i) for i, n, _ in self.fs._dir_entries(ino)],
+                         [("again.txt", build.INO_EXTENT),
+                          ("legacy.txt", build.INO_LEGACY),
+                          ("inline.txt", build.INO_INLINE)])
 
 
 class FileContent(Ext4Fixture):
@@ -190,12 +202,38 @@ class FileContent(Ext4Fixture):
         st = self.fs.stat(self.root["inline.txt"])
         self.assertEqual(st["mapping"], "inline")
 
-    # Engine bug: engine/fs/ext4.py:296 reads inline data past 60 bytes from
-    # raw[128:] (i_extra_isize...) instead of the "system.data" xattr.
-    @unittest.expectedFailure
+    # Inline data past 60 bytes lives in the "system.data" xattr.
     def test_inline_data_spilling_into_xattr(self):
         self.assertEqual(self.read("inline_long.txt"),
                          build.CONTENT["inline_long.txt"])
+
+    def test_damaged_inline_xattr_gives_nothing_past_i_block(self):
+        long_ = build.CONTENT["inline_long.txt"]
+        good = bytearray(build.inode_bytes(
+            build.S_IFREG | 0o644, len(long_), long_[:60],
+            build.FL_INLINE_DATA,
+            xattr=build.inline_data_xattr(long_[60:])))
+
+        def damaged(at, value):
+            raw = bytearray(good)
+            raw[at:at + len(value)] = value
+            return bytes(raw)
+
+        cases = {
+            "no magic": damaged(160, b"\x00\x00\x00\x00"),
+            "extra_isize past the inode": damaged(128, b"\xFF\xFF"),
+            "other attribute name": damaged(180, b"dat!"),
+            "value stored in another inode": damaged(168, b"\x0C\x00"),
+            "name overrunning the inode": damaged(164, b"\xFF"),
+        }
+        for label, raw in cases.items():
+            with self.subTest(label):
+                ino = ext4.Inode(99, raw, self.fs)
+                self.assertEqual(ino.inline_xattr(), b"")
+                self.assertEqual(self.fs.read_inode_data(ino), long_[:60])
+        value_past_end = damaged(166, b"\xF0\x00")
+        ino = ext4.Inode(99, value_past_end, self.fs)
+        self.assertEqual(ino.inline_xattr(), b"")
 
     def test_fast_symlink(self):
         self.assertEqual(self.read("link"), build.LINK_TARGET)

@@ -46,6 +46,13 @@ records, not how the code changed.
   clusters was not shown, searched or put on the timeline. Such a directory
   is now read in full
   ([#19](https://github.com/switch-nz/strata/issues/19)).
+- **ext4 inline files over 60 bytes, and inline directories, were misread.**
+  With inline data, a small file or directory is kept inside its inode: the
+  first 60 bytes in the block map and the rest in an extended attribute.
+  Content past 60 bytes was taken from the wrong part of the inode, so the
+  file read back wrong and hashed wrong, and an inline directory's entries
+  were not listed. Both are now read from where ext4 stores them
+  ([#19](https://github.com/switch-nz/strata/issues/19)).
 
 ## [0.1.2] - 2026-09-17
 
