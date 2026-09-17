@@ -380,18 +380,34 @@ def cache_dir(case_path, create=False):
     return d
 
 class Case:
-    def __init__(self, path, name=None, examiner=None):
+    def __init__(self, path, name=None, examiner=None, read_only=False):
         _refuse_if_not_case(path)
         self.path = path
         self.db_path = db_path(path)
+        self.examiner = examiner or os.environ.get("STRATA_EXAMINER",
+                                                   "unattributed")
+        if read_only:
+            # A preview must not write at all: no folder creation, no schema
+            # upgrade, no migrations, no cache/ index. Open the record
+            # through a mode=ro URI — same pattern _looks_like_case_db uses —
+            # so SQLite itself refuses every write and no -journal/-wal/-shm
+            # sibling can appear.
+            uri = "file:%s?mode=ro" % pathname2url(os.path.abspath(self.db_path))
+            self.db = sqlite3.connect(uri, uri=True, check_same_thread=False,
+                                      timeout=30.0)
+            self.db.row_factory = sqlite3.Row
+            self.index_reset = False
+            self.index_db = None
+            self.index_pending = 0
+            self.index = self.db
+            self.fts = False
+            return
         fresh = not os.path.isfile(self.db_path)
         os.makedirs(path, exist_ok=True)
         self.db = sqlite3.connect(self.db_path, check_same_thread=False,
                                   timeout=30.0)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
-        self.examiner = examiner or os.environ.get("STRATA_EXAMINER",
-                                                   "unattributed")
         self._migrate_bookmarks()
         self._migrate_file_hashes()
         self._migrate_bookmark_frame()

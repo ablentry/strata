@@ -23,6 +23,14 @@ records, not how the code changed.
   wrong offset ([#19](https://github.com/switch-nz/strata/issues/19)).
 
 ### Fixed
+- **Previewing a case no longer writes to it.** Opening a case to peek at
+  it — the case picker in the Open dialog — upgraded old schemas, created a
+  `cache/` folder with an empty content index in it, and could add audit
+  entries to the case record before anything was opened. On a read-only
+  archive folder this made preview fail outright with a permission error.
+  A preview is now read-only end to end: it changes nothing in the case
+  folder, and a case there that predates some tables or columns is served
+  as-is and left for the next full open to upgrade.
 
 - **Sparse ext4 files read back wrong.** Where a file had a hole — a range
   never written, which reads as zeros — the data after the hole was shifted
