@@ -10,6 +10,8 @@ INCOMPAT_INLINE_DATA = 0x8000
 
 FL_EXTENTS = 0x00080000
 FL_INLINE_DATA = 0x10000000
+XATTR_MAGIC = 0xEA020000
+XATTR_SYSTEM = 7
 
 S_IFMT = 0xF000
 S_IFDIR = 0x4000
@@ -77,6 +79,28 @@ class Inode:
     @property
     def inline(self):
         return bool(self.flags & FL_INLINE_DATA)
+
+    def inline_xattr(self):
+        """The in-inode "system.data" extended attribute, where inline data
+        past the 60 bytes of i_block is kept; b"" when there is none."""
+        start = 128 + self.extra_isize
+        raw = self.raw
+        if len(raw) < start + 4 or \
+                struct.unpack("<I", raw[start:start + 4])[0] != XATTR_MAGIC:
+            return b""
+        first = start + 4
+        i = first
+        while i + 16 <= len(raw):
+            name_len, index, value_offs, value_inum, value_size = \
+                struct.unpack("<BBHII", raw[i:i + 12])
+            if not name_len and not index and not value_offs:
+                break
+            name = raw[i + 16:i + 16 + name_len]
+            if index == XATTR_SYSTEM and name == b"data" and not value_inum:
+                v = first + value_offs
+                return bytes(raw[v:min(len(raw), v + value_size)])
+            i += (16 + name_len + 3) & ~3
+        return b""
 
 class Ext4FS:
     name = "ext4"
@@ -316,7 +340,7 @@ class Ext4FS:
     def read_inode_data(self, ino, max_bytes=None):
         limit = ino.size if max_bytes is None else min(ino.size, max_bytes)
         if ino.inline:
-            body = ino.block_area + ino.raw[128:]
+            body = ino.block_area + ino.inline_xattr()
             return bytes(body[:limit])
         if ino.is_link and ino.size < 60:
             return bytes(ino.block_area[:ino.size])
@@ -332,7 +356,14 @@ class Ext4FS:
         return bytes(out[:limit])
 
     def _dir_entries(self, ino):
-        data = self.read_inode_data(ino)
+        if ino.inline:
+            # i_block opens with the parent's inode number (the ".." entry)
+            # and the xattr value continues the dirents on its own.
+            return (self._parse_dirents(ino.block_area[4:])
+                    + self._parse_dirents(ino.inline_xattr()))
+        return self._parse_dirents(self.read_inode_data(ino))
+
+    def _parse_dirents(self, data):
         out = []
         i = 0
         filetype = bool(self.feature_incompat & INCOMPAT_FILETYPE)
