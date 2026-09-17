@@ -445,15 +445,81 @@ class Raw(TempDir):
         self.assertEqual(img.size, 0)
         self.assertEqual(img.read_at(0, 10), b"")
 
-    # Engine bug: engine/ewf.py:538 open_image hands .001 to RawImage, which
-    # opens that one file only; README promises split raw sets.
-    @unittest.expectedFailure
+    def write_split(self, piece, first=1, skip=(), prefix="split"):
+        names = []
+        for i, data in enumerate(build.split_raw(MEDIA, piece)):
+            name = "%s.%03d" % (prefix, first + i)
+            if first + i not in skip:
+                self.write(name, data)
+            names.append(name)
+        return names
+
     def test_split_raw_set(self):
-        for i, piece in enumerate(build.split_raw(MEDIA, 3000)):
-            self.write("split.%03d" % (i + 1), piece)
+        names = self.write_split(3000)
+        self.write("split.txt", b"acquisition notes\n")
+        self.write("other.002", b"not part of the set")
         img = self.open(os.path.join(self.dir, "split.001"))
         self.assertEqual(img.size, len(MEDIA))
         self.assertEqual(img.read_at(2990, 20), MEDIA[2990:3010])
+        self.assertEqual(img.read_at(0, len(MEDIA) + 10), MEDIA)
+        self.assertEqual(img.verify()["computed_md5"],
+                         hashlib.md5(MEDIA).hexdigest())
+        self.assertEqual(img.info()["segments"], names)
+        self.assertEqual(img.info()["findings"], [])
+
+    def test_split_raw_set_opened_from_a_later_piece(self):
+        self.write_split(3000)
+        img = self.open(os.path.join(self.dir, "split.002"))
+        self.assertEqual(img.size, len(MEDIA))
+        self.assertEqual(img.read_at(0, 10), MEDIA[:10])
+
+    def test_split_raw_set_numbered_from_zero(self):
+        names = self.write_split(3000, first=0)
+        img = self.open(os.path.join(self.dir, "split.000"))
+        self.assertEqual(img.info()["segments"], names)
+        self.assertEqual(img.read_at(0, len(MEDIA)), MEDIA)
+
+    def test_lone_numbered_file_is_a_single_image(self):
+        self.write("disk.001", MEDIA)
+        img = self.open(os.path.join(self.dir, "disk.001"))
+        self.assertEqual(img.info()["segments"], ["disk.001"])
+        self.assertEqual(img.read_at(0, len(MEDIA)), MEDIA)
+        self.assertEqual(img.findings, [])
+
+    def test_missing_piece_is_reported(self):
+        self.assertGreater(len(MEDIA), 3 * 2000)
+        self.write_split(2000, skip=(3,))
+        img = self.open(os.path.join(self.dir, "split.001"))
+        self.assertEqual(img.size, 4000)
+        self.assertEqual(img.read_at(0, 4000), MEDIA[:4000])
+        self.assertEqual(len(img.findings), 1)
+        self.assertIn("missing split.003", img.findings[0])
+        self.assertIn("split.004", img.findings[0])
+
+        after = self.open(os.path.join(self.dir, "split.004"))
+        self.assertEqual(after.info()["segments"], ["split.004"])
+        self.assertEqual(after.read_at(0, 10), MEDIA[6000:6010])
+        self.assertEqual(len(after.findings), 1)
+        self.assertIn("read on its own", after.findings[0])
+        self.assertIn("missing split.003", after.findings[0])
+
+    def test_piece_of_the_wrong_size_is_reported(self):
+        self.write_split(3000)
+        self.write("split.002", MEDIA[3000:5000])
+        img = self.open(os.path.join(self.dir, "split.001"))
+        self.assertEqual(len(img.findings), 1)
+        self.assertIn("split.002 is 2000 bytes", img.findings[0])
+
+    def test_many_pieces_keep_few_files_open(self):
+        piece = len(MEDIA) // 40 + 1
+        names = self.write_split(piece)
+        self.assertGreater(len(names), ewf.RawImage.MAX_OPEN)
+        img = self.open(os.path.join(self.dir, "split.001"))
+        got = bytearray()
+        for off in range(0, len(MEDIA), 777):
+            got += img.read_at(off, 777)
+        self.assertEqual(bytes(got), MEDIA)
+        self.assertLessEqual(len(img._handles), ewf.RawImage.MAX_OPEN)
 
 
 class OffsetReaderTests(unittest.TestCase):

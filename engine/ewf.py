@@ -1,3 +1,4 @@
+import bisect
 import io
 import os
 import re
@@ -506,27 +507,113 @@ class EwfImage:
             "findings": list(self.findings),
         }
 
+def discover_raw_segments(path):
+    """The pieces of a split raw set (name.001, name.002, ...) that `path`
+    belongs to, in order, and findings about the set. A lone file, or one
+    without a three-digit extension, is its own set."""
+    directory, name = os.path.split(os.path.abspath(path))
+    m = re.match(r"^(.+)\.([0-9]{3})$", name)
+    if not m:
+        return [path], []
+    prefix, opened = m.group(1), int(m.group(2))
+    numbers = set()
+    for sib in os.listdir(directory):
+        s = re.match(r"^(.+)\.([0-9]{3})$", sib)
+        if s and s.group(1) == prefix and \
+                os.path.isfile(os.path.join(directory, sib)):
+            numbers.add(int(s.group(2)))
+    first = 0 if 0 in numbers else 1
+    run = []
+    while first + len(run) in numbers:
+        run.append(first + len(run))
+    findings = []
+    beyond = sorted(n for n in numbers if n > first + len(run))
+    if opened not in run:
+        return [path], [
+            "%s is read on its own: its split raw set is missing %s.%03d, so "
+            "this piece starts partway through the disk."
+            % (name, prefix, first + len(run))]
+    if beyond:
+        findings.append(
+            "Split raw set is missing %s.%03d; %s after it %s not read."
+            % (prefix, first + len(run), ", ".join(
+                "%s.%03d" % (prefix, n) for n in beyond),
+               "is" if len(beyond) == 1 else "are"))
+    if len(run) == 1:
+        return [path], findings
+    return [os.path.join(directory, "%s.%03d" % (prefix, n))
+            for n in run], findings
+
+
 class RawImage:
+
+    MAX_OPEN = 16
 
     def __init__(self, path):
         self.path = path
-        self.segment_paths = [path]
-        self._fh = open(path, "rb")
-        self.size = os.path.getsize(path)
+        self.segment_paths, self.findings = discover_raw_segments(path)
+        self._starts, self._sizes = [], []
+        total = 0
+        for p in self.segment_paths:
+            self._starts.append(total)
+            self._sizes.append(os.path.getsize(p))
+            total += self._sizes[-1]
+        self.size = total
+        # Every piece but the last is cut to the same size; a piece that is
+        # not has lost or gained data, and every offset after it is suspect.
+        for p, n in zip(self.segment_paths[1:-1], self._sizes[1:-1]):
+            if n != self._sizes[0]:
+                self.findings.append(
+                    "%s is %d bytes where %s is %d; data after it may be at "
+                    "the wrong offset." % (os.path.basename(p), n,
+                                           os.path.basename(
+                                               self.segment_paths[0]),
+                                           self._sizes[0]))
+        if len(self.segment_paths) > 1 and self._sizes[-1] > self._sizes[0]:
+            self.findings.append(
+                "%s is larger than the pieces before it; the set may be "
+                "damaged." % os.path.basename(self.segment_paths[-1]))
+        self._handles = OrderedDict()
+        self._fh_for(0)
         self.bytes_per_sector = 512
-        self.findings = []
         self.header = {}
         self.stored_md5 = None
         self.stored_sha1 = None
         self._pos = 0
         self._io_lock = threading.Lock()
 
+    def _fh_for(self, index):
+        fh = self._handles.get(index)
+        if fh is None:
+            fh = open(self.segment_paths[index], "rb")
+            self._handles[index] = fh
+            while len(self._handles) > self.MAX_OPEN:
+                self._handles.popitem(last=False)[1].close()
+        else:
+            self._handles.move_to_end(index)
+        return fh
+
     def read_at(self, offset, length):
-        if offset >= self.size:
+        if offset < 0 or length <= 0 or offset >= self.size:
             return b""
+        length = min(length, self.size - offset)
+        out = bytearray()
         with self._io_lock:
-            self._fh.seek(offset)
-            return self._fh.read(min(length, self.size - offset))
+            index = bisect.bisect_right(self._starts, offset) - 1
+            while length > 0 and index < len(self.segment_paths):
+                within = offset - self._starts[index]
+                take = min(length, self._sizes[index] - within)
+                if take > 0:
+                    fh = self._fh_for(index)
+                    fh.seek(within)
+                    piece = fh.read(take)
+                    out += piece
+                    if len(piece) < take:
+                        break
+                    offset += take
+                    length -= take
+                index += 1
+        return bytes(out)
 
     def read(self, n=-1):
         d = self.read_at(self._pos, self.size - self._pos if n < 0 else n)
@@ -543,7 +630,8 @@ class RawImage:
         return self._pos
 
     def close(self):
-        self._fh.close()
+        while self._handles:
+            self._handles.popitem()[1].close()
 
     def verify(self, progress=None):
         import hashlib
@@ -562,9 +650,11 @@ class RawImage:
                 "md5_match": None, "sha1_match": None}
 
     def info(self):
-        return {"format": "Raw / dd", "segments": [os.path.basename(self.path)],
+        return {"format": "Raw / dd",
+                "segments": [os.path.basename(p) for p in self.segment_paths],
                 "size": self.size, "bytes_per_sector": 512,
-                "chunk_size": 1 << 20, "acquisition": {}, "findings": []}
+                "chunk_size": 1 << 20, "acquisition": {},
+                "findings": list(self.findings)}
 
 UNSUPPORTED = (
     (b"AFF\x00", "Advanced Forensic Format (AFF)",

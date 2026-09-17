@@ -11,6 +11,17 @@ records, not how the code changed.
 
 ## [Unreleased]
 
+### Added
+
+- **Split raw sets** (`.001`, `.002`, …, or numbered from `.000`) are opened
+  as one disk. Previously opening the first piece read that piece alone, with
+  nothing to say the rest of the disk was missing. The set is joined whichever
+  piece is opened. A missing piece is reported, and only the pieces before
+  the gap are joined. A piece opened on its own because an earlier one is
+  missing is reported as starting partway through the disk. A piece whose
+  size differs from the others is reported, since data after it may be at the
+  wrong offset ([#19](https://github.com/switch-nz/strata/issues/19)).
+
 ### Fixed
 
 - **Sparse ext4 files read back wrong.** Where a file had a hole — a range
