@@ -308,6 +308,21 @@ class ExfatRobustness(unittest.TestCase):
         for r in fs.runs(e):
             self.assertLessEqual(r["offset"] + r["length"], heap_end)
 
+    # Bug: exfat.py trusts the boot sector's cluster_count (offset 92), so a
+    # 0xFFFFFFFF value defeats the heap-end clamp in chain() (the #17 fix)
+    # and a NoFatChain stream still expands by the billions.
+    def test_cluster_count_bounded_by_image(self):
+        data = bytearray(self.good)
+        struct.pack_into("<I", data, 92, 0xFFFFFFFF)
+        fs = exfat.ExfatFS(BytesImage(data))
+        held = max(0, (len(data) - fs.data_offset) // fs.cluster_size)
+        self.assertEqual(fs.cluster_count, held)
+        self.assertIn("trusting the image", " ".join(fs.findings))
+        e = by_name(fs.listdir(0))["Contiguous.dat"]
+        heap_end = fs.cluster_offset(fs.cluster_count + 2)
+        for r in fs.runs(e):
+            self.assertLessEqual(r["offset"] + r["length"], heap_end)
+
     def test_random_garbage_is_not_exfat(self):
         rng = random.Random(5)
         junk = bytes(rng.getrandbits(8) for _ in range(16384))

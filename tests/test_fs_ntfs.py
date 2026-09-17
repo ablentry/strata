@@ -263,11 +263,6 @@ class NtfsOnGpt(unittest.TestCase):
 
     # -- known engine bugs --------------------------------------------------
 
-    # Bug: ntfs.py record() caches the parsed record before checking
-    # rec.valid (lines 428-430) and returns the cache hit unchecked (418), so
-    # an unformatted record is None the first time and an invalid MftRecord
-    # (no .sequence; stat() then raises AttributeError) every time after.
-    @unittest.expectedFailure
     def test_invalid_record_stays_invalid_on_second_lookup(self):
         fs = ntfs.NtfsFS(BytesImage(self.volume))
         self.assertIsNone(fs.record(30))
@@ -310,8 +305,7 @@ class Lznt1(unittest.TestCase):
 
 class NtfsRobustness(unittest.TestCase):
     """Nothing here lists a damaged volume: listdir walks every record the
-    MFT claims, and see test_record_count_bounded_by_volume for why that can
-    be millions on a damaged one."""
+    MFT claims."""
 
     @classmethod
     def setUpClass(cls):
@@ -395,12 +389,6 @@ class NtfsRobustness(unittest.TestCase):
                     fs.read_attr(a, max_bytes=1 << 16)
                 fs.stat({"mft": REC["big"]})
 
-    # Bug: when record 0's $DATA cannot be read, ntfs.py line 401 assumes an
-    # MFT of 1 << 20 clusters, not bounded by cluster_count. A 4 KB image
-    # with 4 KB clusters then claims 4,194,304 records, and build_tree()
-    # (every listdir) reads them all: ~1.8 s here, and it scales with
-    # cluster size — minutes for 64 KB clusters.
-    @unittest.expectedFailure
     def test_record_count_bounded_by_volume(self):
         data = bytearray(self.good[:4096])
         data[13] = 8                                  # 4096-byte clusters

@@ -69,6 +69,10 @@ RUN_OUT_OF_VOLUME = ("A data run pointed outside the volume. That run and "
                      "everything after it in the same run list was not read "
                      "— those files are incomplete here.")
 
+MFT_RECORDS_CLAMPED = ("The $MFT's run list claims more records than the "
+                       "image holds. The record count was clamped to the "
+                       "image — records beyond it are not read here.")
+
 def _note(findings, text):
     if findings is not None and text not in findings:
         findings.append(text)
@@ -375,7 +379,7 @@ class NtfsFS:
         raw_idx = struct.unpack("<b", b[68:69])[0]
         self.index_size = (1 << -raw_idx) if raw_idx < 0 else raw_idx * self.cluster_size
         self.serial = struct.unpack("<Q", b[72:80])[0]
-        if not self.record_size or self.record_size > 65536:
+        if not 128 <= self.record_size <= 65536:
             self.record_size = 1024
 
         self.findings = []
@@ -398,9 +402,16 @@ class NtfsFS:
                 runs = a.runs
                 self.mft_size = a.real_size
                 break
-        self._mft_runs = runs or [(self.mft_cluster, 1 << 20)]
+        self._mft_runs = runs or [(self.mft_cluster,
+                                   max(1, min(1 << 20, self.cluster_count)))]
         self.record_count = sum(l for _, l in self._mft_runs) \
             * self.cluster_size // self.record_size
+        src_size = getattr(self.source, "size", 0) or 0
+        if src_size:
+            most = src_size // self.record_size
+            if self.record_count > most:
+                _note(self.findings, MFT_RECORDS_CLAMPED)
+                self.record_count = most
 
     def _record_offset(self, n):
         target = n * self.record_size
@@ -425,7 +436,7 @@ class NtfsFS:
             return None
         rec = MftRecord(n, buf, self, follow_list=follow_list)
         rec.record_offset = off
-        if cache and len(self._cache) < 200000:
+        if cache and rec.valid and len(self._cache) < 200000:
             self._cache[n] = rec
         return rec if rec.valid else None
 

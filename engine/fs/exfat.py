@@ -69,6 +69,16 @@ class ExfatFS:
         self._bitmap_start = None
         self._bitmap_size = 0
         self.findings = []
+        src_size = getattr(source, "size", 0) or 0
+        if src_size and self.cluster_size:
+            held = max(0, (src_size - self.data_offset) // self.cluster_size)
+            if self.cluster_count > held:
+                msg = ("Boot sector claims %d clusters but the image only "
+                       "holds %d; trusting the image."
+                       % (self.cluster_count, held))
+                if msg not in self.findings:
+                    self.findings.append(msg)
+                self.cluster_count = held
         self._scan_root_metadata()
 
     def cluster_offset(self, n):

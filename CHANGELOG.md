@@ -13,16 +13,28 @@ records, not how the code changed.
 
 ### Fixed
 
+- exFAT timestamps were shifted by the time zone of the device that wrote
+  them. An exFAT entry records local time together with that device's UTC
+  offset, and the offset was ignored, so local time was shown as UTC. Times
+  are now converted to UTC using the recorded offset. An entry that records
+  no valid offset is still shown unadjusted and labelled UTC: treat those
+  times as the device's local time
+  ([#19](https://github.com/switch-nz/strata/issues/19)).
 - An ext2, ext3 or ext4 volume whose journal is missing or damaged no longer
   raises an error when a deleted file's details or content are read, or when a
   file's journal history is asked for. It reports that no history was
   recovered instead
   ([#15](https://github.com/switch-nz/strata/issues/15)).
-- exFAT timestamps now honour the UTC offset each directory entry records
-  (in 15-minute units, as set by the device that wrote the exhibit).
-  Earlier the local time recorded on the device was presented as if it were
-  UTC, shifting every stamped time by the device's zone offset
-  ([#19](https://github.com/switch-nz/strata/issues/19)).
+- An NTFS volume whose `$MFT` cannot be read no longer claims millions of
+  records it does not have, which made listing it hang; the record count is
+  held to what the volume can contain, with a finding when it had to be cut.
+  A damaged MFT record is also no longer returned as a real one the second
+  time it is looked up, which could stop a file's details from showing
+  ([#15](https://github.com/switch-nz/strata/issues/15)).
+- An exFAT volume whose boot sector claims more clusters than the image
+  holds is read using what the image actually holds, with a finding, so a
+  damaged boot sector can no longer exhaust memory
+  ([#15](https://github.com/switch-nz/strata/issues/15)).
 
 ## [0.1.1] - 2026-09-17
 
