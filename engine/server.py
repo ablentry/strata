@@ -985,7 +985,7 @@ class Handler(BaseHTTPRequestHandler):
                     "casedb.not_a_case" if p and os.path.exists(p)
                     else "server.case_peek.such_case_file") % p})
             try:
-                c = Case(p)
+                c = Case(p, read_only=True)
                 out = c.summary()
                 out["audit_integrity"] = c.verify_audit()
                 c.close()
@@ -1984,7 +1984,7 @@ class Handler(BaseHTTPRequestHandler):
             if s.running_tasks():
                 return self._send(409, self._tasks_busy(s, "open another case"))
             try:
-                peek = Case(cp)
+                peek = Case(cp, read_only=True)
                 items = peek.summary()["evidence"]
                 peek.close()
             except Exception as exc:

@@ -22,7 +22,7 @@ before anything new.
       still built one list element per cluster, so a corrupt stream length on
       a large genuine volume can ask for millions of entries. Representing
       contiguous runs as `(start, count)` removes it.
-- [ ] Previewing a genuine case can still upgrade its schema or create its
+- [x] Previewing a genuine case can still upgrade its schema or create its
       `cache/` folder. It writes only to Strata's own record, never to
       evidence, but a preview should not write at all.
 
