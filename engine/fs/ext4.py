@@ -219,11 +219,19 @@ class Ext4FS:
         self._inode_cache[num] = ino
         return ino
 
-    def _extent_runs(self, block_area, depth_guard=0):
+    def _extent_runs(self, block_area, depth_guard=0, want_depth=None,
+                     seen=None):
         if len(block_area) < 12 or block_area[0:2] != b"\x0A\xF3":
             return []
         entries = struct.unpack("<H", block_area[2:4])[0]
         depth = struct.unpack("<H", block_area[6:8])[0]
+        # Each level down is exactly one shallower, and no index block is
+        # read twice: a damaged tree that points back at itself, or at one
+        # node many times, would otherwise cost fan-out ** depth reads.
+        if want_depth is not None and depth != want_depth:
+            return []
+        if seen is None:
+            seen = set()
         out = []
         if depth == 0:
             for i in range(entries):
@@ -245,8 +253,12 @@ class Ext4FS:
                     break
                 leaf = struct.unpack("<I", e[4:8])[0] | \
                     (struct.unpack("<H", e[8:10])[0] << 32)
+                if leaf in seen:
+                    continue
+                seen.add(leaf)
                 node = self.source.read_at(leaf * self.block_size, self.block_size)
-                out.extend(self._extent_runs(node, depth_guard + 1))
+                out.extend(self._extent_runs(node, depth_guard + 1,
+                                             depth - 1, seen))
         return out
 
     def _indirect_blocks(self, block_area, needed):

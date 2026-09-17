@@ -59,6 +59,10 @@ records, not how the code changed.
   counts as a segment now once the set reaches `.E99`, the point where EWF
   moves on to lettered names, and only if the file is an EWF segment
   ([#19](https://github.com/switch-nz/strata/issues/19)).
+- A damaged ext4 extent tree whose index points back at itself, or at one
+  node many times over, no longer hangs reading a file. Each node is read
+  once, and a node at the wrong depth is ignored
+  ([#19](https://github.com/switch-nz/strata/issues/19)).
 
 ## [0.1.2] - 2026-09-17
 
