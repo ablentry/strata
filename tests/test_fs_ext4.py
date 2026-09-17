@@ -3,6 +3,7 @@
 
 import os
 import shutil
+import struct
 import sys
 import tempfile
 import unittest
@@ -216,11 +217,30 @@ class FileContent(Ext4Fixture):
         with self.assertRaises(ValueError):
             self.fs.read_file(self.root["extent.txt"], stream="ads")
 
-    # Engine bug: engine/fs/ext4.py:261-271 drops ee_block (logical start),
-    # so holes between extents vanish and later extents shift down.
-    @unittest.expectedFailure
     def test_sparse_extent_hole_reads_as_zeros(self):
         self.assertEqual(self.read("sparse.bin"), build.CONTENT["sparse.bin"])
+
+    def test_range_read_after_a_hole(self):
+        bs = self.fs.block_size
+        self.assertEqual(
+            self.fs.read_range(self.root["sparse.bin"], 2 * bs, bs),
+            build.CONTENT["sparse.bin"][2 * bs:])
+
+    def test_trailing_hole_reads_as_zeros_without_slack(self):
+        # Grow the inode past its last extent: the extra block is a hole.
+        bs = self.fs.block_size
+        entry = self.root["sparse.bin"]
+        ino = self.fs.inode(entry["inode"])
+        size = len(build.CONTENT["sparse.bin"]) + bs + 10
+        data = bytearray(self.image)
+        struct.pack_into("<I", data, ino.table_offset + 4, size)
+        fs = mount(bytes(data))
+        grown = {e["name"]: e for e in fs.listdir(2)}["sparse.bin"]
+        self.assertEqual(grown["size"], size)
+        self.assertEqual(fs.read_file(grown),
+                         build.CONTENT["sparse.bin"]
+                         + bytes(size - len(build.CONTENT["sparse.bin"])))
+        self.assertNotIn("slack", fs.stat(grown))
 
 
 class Journal(Ext4Fixture):
@@ -291,6 +311,17 @@ class Robustness(unittest.TestCase):
     def test_truncated_inside_inode_table(self):
         fs = ext4.Ext4FS(MemImage(build.build_ext4()[:7 * 1024]))
         self.assertEqual(fs.listdir(2), [])
+
+    def test_directory_with_inflated_size_gets_no_holes(self):
+        # Directories are read whole on every listing; a corrupt size must
+        # not turn into gigabytes of hole to zero-fill.
+        data = bytearray(build.build_ext4())
+        ino = mount(bytes(data)).inode(2)
+        struct.pack_into("<I", data, ino.table_offset + 4, 256 << 20)
+        fs = mount(bytes(data))
+        self.assertEqual(fs.inode(2).size, 256 << 20)
+        self.assertFalse(any(r["sparse"] for r in fs.runs(fs.inode(2))))
+        self.assertIn("extent.txt", [e["name"] for e in fs.listdir(2)])
 
     def test_corrupt_extent_magic_gives_no_runs(self):
         data = bytearray(build.build_ext4())
