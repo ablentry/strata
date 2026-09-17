@@ -7,7 +7,7 @@ import threading
 from . import vhdx as vhdx_mod
 from . import ad1 as ad1_mod
 from . import vmdk as vmdk_mod
-from .inflate import inflate_capped
+from .inflate import DAMAGED, STOPPED, inflate_capped, inflate_ended
 import zlib
 from collections import OrderedDict
 
@@ -367,16 +367,33 @@ class EwfImage:
                 "only %d could be read." % (index, c.length, c.offset, c.seg,
                                             len(raw)))
         if c.compressed:
-            data, over = inflate_capped(raw, self.chunk_size)
+            data, over, status = inflate_ended(raw, self.chunk_size)
+            want = max(0, min(self.chunk_size,
+                              self.size - index * self.chunk_size))
             if over:
                 self.findings.append(
                     "Chunk %d inflates past the %d-byte chunk size this "
                     "image declares; it was cut off there."
                     % (index, self.chunk_size))
-            elif not data:
+            elif not data or status == DAMAGED:
+                # Output before zlib rejected the stream is not trustworthy:
+                # the checksum that would vouch for it comes at the end.
                 self.findings.append("Chunk %d failed to decompress; "
                                      "zero-filled." % index)
                 data = b"\x00" * self.chunk_size
+            elif len(data) < want:
+                # A stream that stops early still yields a plausible prefix.
+                # Returned short, it would also end every read at this chunk.
+                self.findings.append(
+                    "Chunk %d is incomplete: its compressed data %s and gave "
+                    "%d of %d bytes; the rest reads as zeros."
+                    % (index, "ends early" if status == STOPPED
+                       else "decompressed short", len(data), want))
+                data = data + b"\x00" * (want - len(data))
+            elif status == STOPPED:
+                self.findings.append(
+                    "Chunk %d's compressed data ends before its checksum, so "
+                    "the chunk could not be verified." % index)
         else:
             if len(raw) >= 4:
                 payload, crc = raw[:-4], struct.unpack("<I", raw[-4:])[0]

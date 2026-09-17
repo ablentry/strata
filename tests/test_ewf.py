@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 import warnings
+import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -177,14 +178,47 @@ class Integrity(TempDir):
         img, _data = self.corrupt(1, self.flip(5))
         self.assertFalse(img.verify()["md5_match"])
 
-    # Engine bug: engine/ewf.py:307-318 (with engine/inflate.py) accepts a
-    # zlib stream that ends early: the short chunk is returned, no finding.
-    @unittest.expectedFailure
     def test_truncated_compressed_chunk_is_reported(self):
         img, data = self.corrupt(0, lambda raw: raw[:len(raw) // 2])
         self.assertTrue(any("Chunk 0" in f for f in img.findings),
                         "short read (%d of %d bytes) with no finding"
                         % (len(data), len(MEDIA)))
+
+    def test_truncated_chunk_does_not_end_the_read(self):
+        # Chunk 0 is cut short; everything after it must still read, at the
+        # right offsets, with the missing part of chunk 0 as zeros.
+        img, data = self.corrupt(0, lambda raw: raw[:len(raw) // 2])
+        cs = build.CHUNK_SIZE
+        self.assertEqual(len(data), len(MEDIA))
+        self.assertEqual(data[cs:], MEDIA[cs:])
+        got = len(data[:cs].rstrip(b"\x00"))
+        self.assertEqual(data[:got], MEDIA[:got])
+
+    def test_damaged_compressed_chunk_is_zero_filled_not_partial(self):
+        # Half the chunk as a flushed deflate block, then an invalid block.
+        # What decoded before the error is unverified, so none of it is used.
+        half = build.CHUNK_SIZE // 2
+
+        def damaged(raw):
+            co = zlib.compressobj()
+            return (co.compress(MEDIA[:half]) + co.flush(zlib.Z_SYNC_FLUSH)
+                    + b"\xff\xff\xff\xff")
+        img, data = self.corrupt(0, damaged)
+        self.assertTrue(any("Chunk 0" in f for f in img.findings))
+        self.assertEqual(data[:build.CHUNK_SIZE], bytes(build.CHUNK_SIZE))
+        self.assertEqual(data[build.CHUNK_SIZE:], MEDIA[build.CHUNK_SIZE:])
+
+    def test_compressed_chunk_missing_only_its_checksum_is_reported(self):
+        img, data = self.corrupt(0, lambda raw: raw[:-4])
+        self.assertTrue(any("Chunk 0" in f and "verified" in f
+                            for f in img.findings))
+        self.assertEqual(data, MEDIA)
+
+    def test_short_final_compressed_chunk_is_not_a_finding(self):
+        img = self.open(self.write_segments(
+            build.build_e01(compress=lambda i: True)))
+        self.assertEqual(img.read_at(0, len(MEDIA)), MEDIA)
+        self.assertEqual([f for f in img.findings if "Chunk" in f], [])
 
     def test_section_descriptor_checksum_mismatch_is_reported(self):
         seg = bytearray(build.build_e01()[0])
