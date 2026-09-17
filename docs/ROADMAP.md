@@ -26,9 +26,6 @@ before anything new.
       still built one list element per cluster, so a corrupt stream length on
       a large genuine volume can ask for millions of entries. Representing
       contiguous runs as `(start, count)` removes it.
-- [ ] Two registry crashes on truncated hives (short base block, deleted-cell
-      carving past the end of the data)
-      ([#19](https://github.com/switch-nz/strata/issues/19)).
 - [ ] Previewing a genuine case can still upgrade its schema or create its
       `cache/` folder. It writes only to Strata's own record, never to
       evidence, but a preview should not write at all.
@@ -69,8 +66,9 @@ recognised and refused by name today; these entries are about *reading* it.
       and hard links through the private metadata directory.
 - [ ] **APFS snapshots** — the superblock's snapshot metadata is located but
       snapshots are not listed or read.
-- [ ] **ext4 extended attributes** — not read at all today, which is also why
-      inline data that spills into `system.data` is misread (#19).
+- [ ] **ext4 extended attributes** — only the in-inode `system.data`
+      attribute that holds inline data is read; the rest (in-inode and
+      external xattr blocks) are not shown.
 
 ### Encryption
 
