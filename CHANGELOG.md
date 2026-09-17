@@ -11,6 +11,12 @@ records, not how the code changed.
 
 ## [Unreleased]
 
+### Added
+
+- [`docs/ROADMAP.md`](docs/ROADMAP.md): where Strata is heading — parser
+  robustness, new evidence formats and the work behind them, with a
+  roadmap diagram (`docs/roadmap-gantt.html`).
+
 ### Fixed
 
 - An ext2, ext3 or ext4 volume whose journal is missing or damaged no longer
