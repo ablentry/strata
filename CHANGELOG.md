@@ -18,6 +18,16 @@ records, not how the code changed.
   file's journal history is asked for. It reports that no history was
   recovered instead
   ([#15](https://github.com/switch-nz/strata/issues/15)).
+- An NTFS volume whose `$MFT` cannot be read no longer claims millions of
+  records it does not have, which made listing it hang; the record count is
+  held to what the volume can contain, with a finding when it had to be cut.
+  A damaged MFT record is also no longer returned as a real one the second
+  time it is looked up, which could stop a file's details from showing
+  ([#15](https://github.com/switch-nz/strata/issues/15)).
+- An exFAT volume whose boot sector claims more clusters than the image
+  holds is read using what the image actually holds, with a finding, so a
+  damaged boot sector can no longer exhaust memory
+  ([#15](https://github.com/switch-nz/strata/issues/15)).
 
 ## [0.1.1] - 2026-09-17
 
