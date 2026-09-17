@@ -297,17 +297,17 @@ class Robustness(unittest.TestCase):
         for data in (b"", b"garbage", bytes(8192), b"hbin" * 2048):
             self.assertIsNone(registry.open_hive(data))
 
-    # Engine bug: engine/registry.py:47-54 unpacks base-block fields without
-    # a length check, so a "regf" file shorter than 48 bytes raises struct.error.
-    @unittest.expectedFailure
+    # A "regf" file cut short inside its 48 bytes of base-block fields.
     def test_truncated_base_block(self):
-        for n in (4, 20, 40):
+        for n in (4, 20, 40, 47, 48, 1000):
             try:
                 h = registry.open_hive(build.build_hive()[:n])
             except struct.error as exc:
                 self.fail("open_hive raised on %d bytes: %s" % (n, exc))
-            if h is not None:
-                self.assertIsNone(h.root())
+            self.assertIsNotNone(h)
+            self.assertIsNone(h.root())
+            self.assertEqual(h.carve_deleted(), {"keys": [], "values": []})
+            self.assertTrue(any("cut short" in f for f in h.info()["findings"]))
 
     def test_base_block_only(self):
         h = registry.open_hive(build.build_hive()[:4096])
@@ -325,10 +325,8 @@ class Robustness(unittest.TestCase):
                 for k in h.subkeys(root):
                     h.values(k)
 
-    # Engine bug: engine/registry.py:268-276 carve_deleted clamps a bin to
-    # 4096 bytes but not to the end of the data, so a hive cut short (e.g.
-    # read with the MAX_HIVE cap) raises struct.error reading a cell size.
-    @unittest.expectedFailure
+    # A hive cut short mid-bin (e.g. read with the MAX_HIVE cap): carving
+    # stops at the end of the data rather than reading cell sizes past it.
     def test_truncated_hive_bins_carve(self):
         data = build.build_hive()
         for cut in self.TRUNCATIONS:
