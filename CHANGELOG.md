@@ -19,6 +19,14 @@ records, not how the code changed.
   its hash were wrong. Holes now read as zeros in place, including a hole at
   the end of a file
   ([#19](https://github.com/switch-nz/strata/issues/19)).
+- **A truncated compressed chunk in an E01 was returned short, silently.**
+  The part that did decompress was served as if it were the whole chunk, with
+  no finding, and a read running across that chunk stopped there, so the rest
+  of the image could not be read in that pass. Such a chunk is now reported,
+  what decompressed is kept, and the missing remainder reads as zeros so
+  everything after it stays at the right offset. A chunk whose compressed data
+  is complete but missing its checksum is reported as unverified
+  ([#19](https://github.com/switch-nz/strata/issues/19)).
 
 ## [0.1.2] - 2026-09-17
 
