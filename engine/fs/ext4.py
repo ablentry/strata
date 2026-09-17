@@ -147,6 +147,9 @@ class Ext4FS:
                     def recover(self, num):
                         return None
 
+                    def read_recovered(self, num, max_bytes=None):
+                        return b""
+
                     def inode_versions(self, num):
                         return []
                 self._journal = _Absent()

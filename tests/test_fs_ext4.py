@@ -320,9 +320,6 @@ class Robustness(unittest.TestCase):
         self.assertTrue(info["findings"])
         self.assertIn("extent.txt", [e["name"] for e in fs.listdir(2)])
 
-    # Engine bug: engine/fs/ext4.py:140-151 the _Absent journal stand-in has
-    # no read_recovered(), which read_file calls for deleted files (line 368).
-    @unittest.expectedFailure
     def test_deleted_file_read_with_unreadable_journal(self):
         fs = mount(build.build_ext4_truncated_journal())
         entry = {e["name"]: e for e in fs.listdir(2)}["deleted.txt"]
