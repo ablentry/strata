@@ -3345,21 +3345,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/export/file":
             part = int(body.get("part") or 0)
             fs = s.fs(part)
-            entry = body.get("entry")
-            if not entry:
-                node = body.get("node")
-                entry = {"name": body.get("name"), "path": body.get("path"),
-                         "size": body.get("size"), "is_dir": False}
-                n = None if node in (None, "", "null") else int(node)
-                fsname = (fs.name or "").upper()
-                if fsname.startswith("NTFS"):
-                    entry["mft"] = n
-                elif fsname.startswith("EXT"):
-                    entry["inode"] = n
-                elif fsname.startswith("APFS") or fsname.startswith("LOGICAL"):
-                    entry["oid"] = n
-                else:
-                    entry["start_cluster"] = n
+            entry = body.get("entry") or _entry_from_body(fs, body)
             out_dir = body.get("dir") or os.path.join(
                 os.path.dirname(s.path), "strata-export")
             try:
@@ -3609,6 +3595,34 @@ def _stream_size(fs, entry, stream):
         if (st.get("name") or "") == (stream or ""):
             return st.get("size") or 0
     return 0 if stream else (entry.get("size") or 0)
+
+def _entry_from_body(fs, body):
+    """Reconstruct a minimal entry from a bare node handle: a caller that
+    has only the filesystem handle (mft/inode/oid/start_cluster) rather than
+    a full listdir() entry -- the bulk "export tagged items" action is the
+    one in-app case, since a tagged item is stored by handle. Any of the
+    fields below that the caller does have are used, so a deleted file
+    exported this way is still read the way engine.fs.* expects a deleted
+    entry to be read, rather than as if it were live, and the export
+    manifest records what the caller actually knew about it."""
+    node = body.get("node")
+    n = None if node in (None, "", "null") else int(node)
+    entry = {"name": body.get("name"), "path": body.get("path"),
+             "size": body.get("size"), "is_dir": False,
+             "deleted": bool(body.get("deleted")),
+             "modified": body.get("modified"),
+             "accessed": body.get("accessed"),
+             "created": body.get("created")}
+    fsname = (fs.name or "").upper()
+    if fsname.startswith("NTFS"):
+        entry["mft"] = n
+    elif fsname.startswith("EXT"):
+        entry["inode"] = n
+    elif fsname.startswith("APFS") or fsname.startswith("LOGICAL"):
+        entry["oid"] = n
+    else:
+        entry["start_cluster"] = n
+    return entry
 
 def _export_one(fs, entry, out_dir, session, rel=None, dest=None,
                 manifest=True, stream=""):

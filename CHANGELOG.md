@@ -28,6 +28,17 @@ records, not how the code changed.
   ask for hundreds of millions of entries, which was slow enough to look like
   a hang; the extent is now computed directly, regardless of its length
   ([#43](https://github.com/switch-nz/strata/issues/43)).
+- **Exporting a tagged deleted file could silently export the wrong content.**
+  "Export tagged items" sends a filesystem handle rather than a full listing
+  entry, and the flag saying an item is deleted did not make the trip. A
+  deleted file was then read as if it were live: on FAT this returned only
+  its first cluster for anything spanning more than one, and on ext4 an
+  unlinked inode whose blocks were already cleared exported as empty instead
+  of recovering from the journal. Deleted status, and the modified/accessed/
+  created times already recorded for the tag, now travel with the export, so
+  the manifest is complete and the content is read the way a deleted entry
+  needs to be
+  ([#85](https://github.com/switch-nz/strata/issues/85)).
 - **Previewing a case no longer writes to it.** Opening a case to peek at
   it — the case picker in the Open dialog — upgraded old schemas, created a
   `cache/` folder with an empty content index in it, and could add audit
