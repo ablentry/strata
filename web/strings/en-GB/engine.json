@@ -257,6 +257,8 @@
   "vmdk.extent_outside_folder": "This VMDK descriptor names its data as %r, which is outside the descriptor's own folder, so Strata did not follow it.",
   "vmdk.file_starts_kdmv_but": "This file starts with KDMV but its header will not parse.",
   "vmdk.grain_directory_runs_past": "The grain directory runs past the end of the file; this VMDK is truncated.",
+  "vmdk.implausible_vmdk_grain_table_count": "Implausible VMDK grain directory: this capacity and grain layout would need %d grain tables.",
+  "vmdk.implausible_vmdk_grain_table_entries": "Implausible VMDK grain table size: %d entries per table.",
   "vmdk.implausible_vmdk_grain_size": "Implausible VMDK grain size: %d sectors",
   "vmdk.stream_optimized_vmdk_whose": "This is a stream-optimized VMDK whose footer is missing or unreadable, so its grain directory cannot be found.",
   "vmdk.vmdk": "Not a VMDK.",

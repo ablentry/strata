@@ -79,6 +79,18 @@ records, not how the code changed.
   keys and values from one cut short part-way through its data stops at the
   end of what is there
   ([#19](https://github.com/switch-nz/strata/issues/19)).
+- **A damaged or hostile VMDK could hang or exhaust memory opening it.** A
+  handful of header and grain-table fields — the descriptor's location, the
+  grain size, the number of entries per grain table, and a compressed
+  grain's declared size — were trusted outright. An implausible value in any
+  of them could seek or allocate by that value directly, which crashed the
+  open, exhausted memory, or in one case made every read across the disk
+  slow enough to stall an examination. Each is now checked against what the
+  file could plausibly hold; an extent whose layout is genuinely implausible
+  is refused, and a field that only overruns the file is clipped and
+  reported. A grain whose compressed data ends early is now also reported,
+  rather than silently read as if it were complete
+  ([#19](https://github.com/switch-nz/strata/issues/19)).
 
 ### Changed
 
