@@ -375,12 +375,39 @@ class Robustness(unittest.TestCase):
         data[root_block * 1024 + 4:root_block * 1024 + 6] = b"\x00\x00"
         self.assertEqual(mount(bytes(data)).listdir(2), [])
 
-    # Engine bug: engine/fs/ext4.py:214-222 bounds extent-tree depth (8) but
-    # not fan-out or revisits; a self-referencing index node costs 84^7 reads.
-    @unittest.expectedFailure
+    # A self-referencing index node would cost 84 ** 7 reads if every
+    # pointer were followed; each index block is read once instead.
     def test_self_referencing_extent_index_is_bounded(self):
         fs = mount(build.build_ext4_extent_loop(), read_budget=20000)
-        fs.runs(fs.inode(12))
+        self.assertEqual(fs.runs(fs.inode(12)), [
+            {"offset": 0, "length": 4 * 1024, "block": 0, "blocks": 4,
+             "logical": 0, "sparse": True, "initialised": True,
+             "used": 4096}])
+
+    def test_index_nodes_shared_across_a_wide_tree_are_read_once(self):
+        # Depths are consistent, so only revisit tracking bounds this:
+        # 4 * 84 * 84 paths all lead to one leaf holding one extent.
+        img = build.Ext4Image(blocks=64)
+        img.superblock(build.INCOMPAT_FILETYPE | build.INCOMPAT_EXTENTS, 0,
+                       journal_inum=0)
+        fan = (build.BLOCK_SIZE - 12) // 12
+        a, b, leaf, data = img.alloc(), img.alloc(), img.alloc(), img.alloc()
+        img.write_block(data, b"shared leaf data")
+        img.write_block(leaf, build.extent_header(1, fan, 0)
+                        + build.extent(0, 1, data))
+        img.write_block(b, build.extent_header(fan, fan, 1)
+                        + build.extent_index(0, leaf) * fan)
+        img.write_block(a, build.extent_header(fan, fan, 2)
+                        + build.extent_index(0, b) * fan)
+        img.set_inode(12, build.inode_bytes(
+            build.S_IFREG | 0o644, 16,
+            build.extent_area([build.extent_index(0, a)] * 4, 3),
+            build.FL_EXTENTS))
+        fs = mount(img.to_bytes(), read_budget=20000)
+        runs = fs.runs(fs.inode(12))
+        self.assertEqual([(r["block"], r["blocks"]) for r in runs],
+                         [(data, 1)])
+        self.assertEqual(fs.read_file({"inode": 12}), b"shared leaf data")
 
     def test_truncated_journal_is_reported_absent(self):
         fs = mount(build.build_ext4_truncated_journal())
