@@ -56,6 +56,13 @@ class Chunk:
         self.length = length
         self.compressed = compressed
 
+def _has_ewf_signature(path):
+    try:
+        with open(path, "rb") as fh:
+            return fh.read(8) in (EVF_SIG, LVF_SIG, EVF2_SIG)
+    except OSError:
+        return False
+
 def discover_segments(path):
     base, ext = os.path.splitext(path)
     if len(ext) != 4:
@@ -72,6 +79,16 @@ def discover_segments(path):
     for name in os.listdir(directory):
         if pattern.match(name):
             found.append(os.path.join(directory, name))
+
+    # Past .E99 segments are lettered (.EAA ... .ZZZ), which a sidecar such
+    # as notes.txt also matches. Lettered names only count once .E99 exists,
+    # and only when they carry the EWF signature.
+    numbered = [p for p in found if os.path.splitext(p)[1][2:].isdigit()]
+    if any(os.path.splitext(p)[1][2:] == "99" for p in numbered):
+        found = numbered + [p for p in found
+                            if p not in numbered and _has_ewf_signature(p)]
+    else:
+        found = numbered
 
     def order(p):
         e = os.path.splitext(p)[1][1:].upper()

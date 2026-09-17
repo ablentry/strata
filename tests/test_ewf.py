@@ -136,14 +136,25 @@ class SplitSegments(TempDir):
                ewf.discover_segments(os.path.join(self.dir, "s.E01"))]
         self.assertEqual(got, ["s.E01", "s.E02", "s.E09", "s.E10"])
 
-    # Engine bug: engine/ewf.py:58-61 the [A-Z]{3} alternative (IGNORECASE)
-    # makes any 3-letter sibling such as x.txt part of the segment set.
-    @unittest.expectedFailure
+    # A three-letter sibling such as x.txt fits the lettered segment names
+    # used past .E99, so it must not join a set that has no .E99.
     def test_unrelated_sidecar_file_is_not_a_segment(self):
         path = self.write_segments(build.build_e01())
         self.write("x.txt", b"acquisition notes\n")
         img = self.open(path)
         self.assertEqual(img.read_at(0, len(MEDIA)), MEDIA)
+        self.assertEqual(img.info()["segments"], ["x.E01"])
+
+    def test_lettered_segments_follow_e99_when_they_are_ewf(self):
+        for n in range(1, 100):
+            self.write("s.E%02d" % n, b"")
+        self.write("s.EAB", ewf.EVF_SIG)
+        self.write("s.EAA", ewf.EVF_SIG)
+        self.write("s.txt", b"acquisition notes\n")
+        got = [os.path.basename(p) for p in
+               ewf.discover_segments(os.path.join(self.dir, "s.E01"))]
+        self.assertEqual(got, ["s.E%02d" % n for n in range(1, 100)]
+                         + ["s.EAA", "s.EAB"])
 
 
 class Integrity(TempDir):
