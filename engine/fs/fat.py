@@ -4,6 +4,7 @@ import datetime
 from .ranges import read_runs
 
 def _dos_time(date, time_, tenths=0):
+    # FAT records local time and no zone, so no "Z": nothing says it is UTC.
     if date == 0:
         return None
     try:
@@ -13,7 +14,7 @@ def _dos_time(date, time_, tenths=0):
         h = (time_ >> 11) & 0x1F
         mi = (time_ >> 5) & 0x3F
         s = (time_ & 0x1F) * 2 + tenths // 100
-        return datetime.datetime(y, mo, d, h, mi, min(s, 59)).isoformat() + "Z"
+        return datetime.datetime(y, mo, d, h, mi, min(s, 59)).isoformat()
     except ValueError:
         return None
 

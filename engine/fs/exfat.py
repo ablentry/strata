@@ -16,7 +16,9 @@ def _ts(packed, tenths=0, tz=0):
     """Decode a DOS-style timestamp. ``tz`` is the entry's UtcOffset byte
     (spec 7.4.10): bit 7 OffsetValid, bits 0-6 a signed offset in 15-minute
     units, signed-decimal per Table 31 (0x01 = +00:15, 0x7F = -00:15).  The
-    timestamp is local time; the honest UTC rendering subtracts it."""
+    timestamp is local time; the honest UTC rendering subtracts it. With no
+    valid offset the zone is unknown, so the time is returned as recorded,
+    without a "Z": whether it is UTC or local is for the examiner to judge."""
     if not packed:
         return None
     try:
@@ -27,9 +29,10 @@ def _ts(packed, tenths=0, tz=0):
         mi = (packed >> 5) & 0x3F
         s = (packed & 0x1F) * 2 + tenths // 100
         dt = datetime.datetime(y, mo, d, h, mi, min(s, 59))
-        if tz & 0x80:
-            dt -= datetime.timedelta(minutes=(tz & 0x40 and (tz & 0x3F) - 64
-                                              or (tz & 0x3F)) * 15)
+        if not tz & 0x80:
+            return dt.isoformat()
+        dt -= datetime.timedelta(minutes=(tz & 0x40 and (tz & 0x3F) - 64
+                                          or (tz & 0x3F)) * 15)
         return dt.isoformat() + "Z"
     except ValueError:
         return None

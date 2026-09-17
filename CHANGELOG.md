@@ -80,6 +80,18 @@ records, not how the code changed.
   end of what is there
   ([#19](https://github.com/switch-nz/strata/issues/19)).
 
+### Changed
+
+- **Times recorded with no time zone are no longer shown as UTC.** FAT
+  timestamps, the DOS times inside shellbags, and exFAT timestamps whose
+  entry records no valid UTC offset are local time on a clock whose zone the
+  media does not say. They were marked and displayed as UTC, and converted to
+  the chosen display zone as if they were. They are now shown exactly as
+  recorded, with no zone, no conversion and no label, in the interface and
+  the report. Deciding which zone they belong to is left to the examiner.
+  The timeline still has to place them somewhere to sort them, and orders
+  them as if they were UTC ([#19](https://github.com/switch-nz/strata/issues/19)).
+
 ## [0.1.2] - 2026-09-17
 
 A correctness release: exFAT timestamps, and damaged ext, NTFS and exFAT

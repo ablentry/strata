@@ -19,10 +19,16 @@ def _bytes(n):
         n /= 1024
     return "—"
 
+def _has_zone(iso):
+    s = str(iso)
+    return s.endswith("Z") or (len(s) > 6 and s[-6] in "+-" and s[-3] == ":")
+
 def _when(iso, tz=None):
     if not iso:
         return "—"
     utc = str(iso).replace("T", " ").replace("Z", "")
+    if not _has_zone(iso):
+        return utc   # recorded with no zone: shown as-is, not converted
     if not tz or tz.get("offset_minutes") is None:
         return "%s UTC" % utc
     try:
