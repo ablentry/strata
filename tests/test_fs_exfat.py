@@ -299,7 +299,6 @@ class ExfatRobustness(unittest.TestCase):
     # list element per cluster from the untrusted length, unbounded by the
     # cluster count, so a corrupt length of 2^50 means a 2^40-element list
     # (hang / MemoryError) on any read. Kept small here: 64 MiB, 65536 items.
-    @unittest.expectedFailure
     def test_contiguous_run_bounded_by_cluster_heap(self):
         data = bytearray(self.good)
         stream = self.good.index("Contiguous.dat".encode("utf-16-le")) - 34
