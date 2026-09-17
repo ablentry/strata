@@ -325,6 +325,15 @@ class Robustness(unittest.TestCase):
         entry = {e["name"]: e for e in fs.listdir(2)}["deleted.txt"]
         self.assertEqual(fs.read_file(entry), b"")
 
+    def test_invalid_journal_answers_without_raising(self):
+        # ext2 has no journal, so Journal._load() returns early and the
+        # object is left invalid; its entry points must still answer.
+        journal = mount(build.build_ext2_legacy()).journal
+        self.assertFalse(journal.valid)
+        self.assertEqual(journal.inode_versions(12), [])
+        self.assertIsNone(journal.recover(12))
+        self.assertEqual(journal.read_recovered(12), b"")
+
 
 if __name__ == "__main__":
     unittest.main()
