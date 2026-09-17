@@ -133,14 +133,23 @@ class Exfat(unittest.TestCase):
         self.assertEqual(inner["Inner.txt"]["path"], "/Subdir/Inner.txt")
         self.assertEqual(self.fs.read_file(inner["Inner.txt"]), b"inner\n")
 
-    # Bug: exfat.py listdir() always walks the FAT; a NoFatChain directory's
-    # FAT entries are zero, so only its first cluster is read and entries
-    # in later clusters (here Second.txt in cluster 18) are never listed.
-    @unittest.expectedFailure
+    # A NoFatChain directory's FAT entries are zero, so its clusters come
+    # from the stream extension in its parent, not from the FAT.
     def test_contiguous_subdirectory_second_cluster_listed(self):
         sub = self.root["Subdir"]
         inner = by_name(self.fs.listdir(sub["start_cluster"], "/Subdir"))
         self.assertIn("Second.txt", inner)
+        self.assertEqual(inner["Second.txt"]["path"], "/Subdir/Second.txt")
+        self.assertEqual(self.fs.read_file(inner["Second.txt"]), b"second\n")
+
+    def test_contiguous_subdirectory_listed_before_its_parent(self):
+        # A node can arrive without its parent listed first (a saved case,
+        # a bookmark), so the stream is found from the root down.
+        fs = ntfs.open_fs(OffsetReader(self.image, self.part["offset"],
+                                       self.part["size"], self.part["slot"]))
+        inner = by_name(fs.listdir(self.root["Subdir"]["start_cluster"],
+                                   "/Subdir"))
+        self.assertEqual(set(inner), {"Inner.txt", "Second.txt"})
 
     # -- file content ------------------------------------------------------
 
@@ -233,6 +242,31 @@ class ExfatRobustness(unittest.TestCase):
         except ValueError:
             return
         self.assertEqual(fs.listdir(0), [])
+
+    def test_contiguous_directory_claiming_huge_length_reads_to_its_end(self):
+        fs = self.open_bytes(self.good)
+        sub = by_name(fs.listdir(0))["Subdir"]
+        data = bytearray(self.good)
+        streams = [k for k in range(0, len(data) - 31, 32)
+                   if data[k] == 0xC0 and struct.unpack(
+                       "<I", data[k + 20:k + 24])[0] == sub["start_cluster"]]
+        self.assertEqual(len(streams), 1)
+        at = streams[0] + 24                       # stream extension length
+        data[at:at + 8] = struct.pack("<Q", 1 << 40)
+
+        reads = []
+
+        class Counting(BytesImage):
+            def read_at(self, offset, length):
+                reads.append(length)
+                return BytesImage.read_at(self, offset, length)
+
+        fs = ntfs.open_fs(OffsetReader(Counting(data), 0, len(data)))
+        fs.listdir(0)
+        del reads[:]
+        inner = by_name(fs.listdir(sub["start_cluster"], "/Subdir"))
+        self.assertEqual(set(inner), {"Inner.txt", "Second.txt"})
+        self.assertLessEqual(sum(reads), 2 * C)
 
     def test_truncated_mid_heap(self):
         fs = self.open_bytes(self.good[:self.good.index(b"Hello, exFAT")])

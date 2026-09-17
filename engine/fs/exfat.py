@@ -10,6 +10,7 @@ ENTRY_STREAM = 0xC0
 ENTRY_NAME = 0xC1
 
 IN_USE = 0x80
+MAX_DIR_BYTES = 256 << 20       # the largest directory exFAT allows
 
 def _ts(packed, tenths=0, tz=0):
     """Decode a DOS-style timestamp. ``tz`` is the entry's UtcOffset byte
@@ -69,6 +70,7 @@ class ExfatFS:
         self._bitmap_start = None
         self._bitmap_size = 0
         self.findings = []
+        self._dir_streams = {}     # first cluster -> (contiguous, length)
         src_size = getattr(source, "size", 0) or 0
         if src_size and self.cluster_size:
             held = max(0, (src_size - self.data_offset) // self.cluster_size)
@@ -147,17 +149,52 @@ class ExfatFS:
         return self._bitmap or b""
 
     def _read_dir_bytes(self, cluster, contiguous=False, limit=None):
+        if limit:
+            limit = min(limit, MAX_DIR_BYTES)
         clusters = self.chain(cluster, contiguous, limit)
         buf = bytearray()
-        for c in clusters:
-            buf += self.source.read_at(self.cluster_offset(c), self.cluster_size)
+        for c in clusters[:MAX_DIR_BYTES // self.cluster_size]:
+            block = self.source.read_at(self.cluster_offset(c),
+                                        self.cluster_size)
+            buf += block
             if limit and len(buf) >= limit:
                 break
+            if any(block[k] == 0 for k in range(0, len(block), 32)):
+                break          # end-of-directory marker: nothing follows
         return bytes(buf)
+
+    def _dir_stream(self, cluster):
+        """How a directory's clusters are found: (contiguous, length) from
+        its stream extension, or None to walk the FAT. The stream lives in
+        the parent, so a directory not reached through its parent yet is
+        looked for from the root down."""
+        if cluster == self.root_cluster:
+            return None
+        if cluster not in self._dir_streams:
+            stack, seen = [self.root_cluster], set()
+            while stack and cluster not in self._dir_streams:
+                c = stack.pop()
+                if c in seen:
+                    continue
+                seen.add(c)
+                try:
+                    found = self._list(c, "/", self._dir_streams.get(c))
+                except Exception:
+                    continue
+                stack.extend(e["start_cluster"] for e in found
+                             if e["is_dir"] and not e["deleted"]
+                             and e["start_cluster"])
+        return self._dir_streams.get(cluster)
 
     def listdir(self, cluster=0, path="/"):
         cluster = cluster or self.root_cluster
-        data = self._read_dir_bytes(cluster)
+        return self._list(cluster, path, self._dir_stream(cluster))
+
+    def _list(self, cluster, path, dir_stream):
+        if dir_stream and dir_stream[0]:
+            data = self._read_dir_bytes(cluster, True, dir_stream[1])
+        else:
+            data = self._read_dir_bytes(cluster)
         base = self.cluster_offset(cluster)
         entries = []
         i = 0
@@ -201,6 +238,11 @@ class ExfatFS:
 
             name = "".join(name_parts)[:stream["name_length"]].rstrip("\x00")
             is_dir = bool(attrs & 0x10)
+            first = stream["first_cluster"]
+            if is_dir and first and (not deleted
+                                     or first not in self._dir_streams):
+                self._dir_streams[first] = (bool(stream["flags"] & 0x02),
+                                            stream["length"])
             entries.append({
                 "name": name or "<unnamed>",
                 "path": path.rstrip("/") + "/" + name,
