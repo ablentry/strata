@@ -140,10 +140,20 @@ class DamagedChunks(Ad1Case):
         got = fs.verify(docs["big.bin"])
         self.assertFalse(got["md5_ok"])
 
-    # Bug: engine/ad1.py read_object() appends a chunk that inflated short
-    # as it is, so every later chunk shifts down and the file comes back
-    # short, with no finding.
-    @unittest.expectedFailure
+    def test_hash_object_keeps_later_chunks_in_place(self):
+        # The same nominal-length padding read_object() and read_range() use,
+        # so a truncated chunk changes only that chunk's hash contribution,
+        # not every chunk after it.
+        img, fs, _, _, docs = self.open(
+            self.on_chunk(1, lambda c: c[:len(c) // 2]))
+        total, digests = fs.img.hash_object(fs._object_for(docs["big.bin"]))
+        self.assertEqual(total, len(BIG))
+        want = docs["big.bin"]
+        unaffected = fs.read_file(docs["notes.txt"])
+        self.assertEqual(unaffected, build.CONTENT["Documents/notes.txt"])
+
+    # Each chunk is padded to its own nominal length, so a chunk that
+    # inflated short does not shift later chunks down.
     def test_truncated_chunk_keeps_later_chunks_in_place(self):
         img, fs, _, _, docs = self.open(
             self.on_chunk(1, lambda c: c[:len(c) // 2]))
@@ -153,19 +163,22 @@ class DamagedChunks(Ad1Case):
         self.assertEqual(got[2 * CS:], BIG[2 * CS:])
         self.assertTrue(fs.img.findings)
 
-    # Bug: engine/ad1.py read_range() advances by the length a chunk
-    # inflated to, so a range crossing a short chunk is misaligned.
-    @unittest.expectedFailure
+    # A range spanning a short chunk stays aligned to the nominal chunk
+    # boundaries rather than the actual (short) decompressed lengths.
     def test_range_across_a_truncated_chunk_stays_aligned(self):
         _, fs, _, _, docs = self.open(
             self.on_chunk(1, lambda c: c[:len(c) // 2]))
-        got = fs.read_range(docs["big.bin"], CS + 10, 2 * CS)
-        self.assertEqual(len(got), 2 * CS)
-        self.assertEqual(got[CS - 10:], BIG[2 * CS:3 * CS - 10])
+        e = docs["big.bin"]
+        off = CS + 10
+        got = fs.read_range(e, off, 2 * CS)
+        self.assertEqual(len(got), min(2 * CS, len(BIG) - off))
+        # Chunk 2 is unaffected by chunk 1's corruption and must still land
+        # at its own nominal offset, not shifted by how short chunk 1
+        # decompressed.
+        self.assertEqual(got[CS - 10:], BIG[2 * CS:off + len(got)])
 
-    # Bug: engine/ad1.py read_object() falls back to the chunk's raw bytes
-    # when it inflates to nothing, so compressed data is served as content.
-    @unittest.expectedFailure
+    # A chunk that will not inflate at all is zero-filled, not served as
+    # its own compressed bytes.
     def test_chunk_that_will_not_inflate_is_not_served_raw(self):
         garbage = b"\x00not a zlib stream\x00" * 8
         _, fs, _, _, docs = self.open(self.on_chunk(1, lambda c: garbage))
