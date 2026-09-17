@@ -93,6 +93,15 @@ class Ad1Segments:
     def __init__(self, path):
         self.paths = self._siblings(path)
         self._files = [open(p, "rb") for p in self.paths]
+        try:
+            self._init_from_files()
+        except BaseException:
+            # Otherwise a rejected segment leaves the evidence files held
+            # open, which on Windows keeps them locked.
+            self.close()
+            raise
+
+    def _init_from_files(self):
         self._io_lock = threading.Lock()
         self._sizes = [os.path.getsize(p) for p in self.paths]
         self.size = sum(self._sizes)
@@ -100,6 +109,8 @@ class Ad1Segments:
         head = self.read_at(0, 0x40)
         if not looks_like_ad1(head):
             raise Ad1Error(_t("ad1.ad1_segment_magic_missing"))
+        if len(head) < 0x2C:
+            raise Ad1Error(_t("ad1.segment_header_runs_past"))
         self.version = struct.unpack_from("<I", head, 0x10)[0]
         index = struct.unpack_from("<I", head, 0x18)[0]
         count = struct.unpack_from("<I", head, 0x1C)[0]
@@ -174,8 +185,19 @@ class Ad1:
         if h[:len(IMAGE_MAGIC)] != IMAGE_MAGIC:
             raise Ad1Error(
                 _t("ad1.segment_header_ad1_but") % base)
-        self.chunk_size = struct.unpack_from("<I", h, 0x18)[0]
+        if len(h) < 0x38:
+            raise Ad1Error(_t("ad1.logical_image_header_runs_past") % base)
+        declared_chunk_size = struct.unpack_from("<I", h, 0x18)[0]
+        # Bounded like _chunk_ceiling()'s decompression cap: real chunks run
+        # tens of KB, and this value also sizes every zero-fill for a chunk
+        # that fails to decompress, so an unbounded declaration is a
+        # multi-gigabyte allocation from one damaged or hostile chunk.
+        self.chunk_size = min(max(declared_chunk_size, 1), 1 << 26)
         self.findings = []
+        if self.chunk_size != declared_chunk_size:
+            self.findings.append(
+                "Chunk size declared as %d bytes is implausible; using %d."
+                % (declared_chunk_size, self.chunk_size))
         trailer = struct.unpack_from("<I", h, 0x24)[0]
         nlen = struct.unpack_from("<I", h, 0x2C)[0]
         noff = struct.unpack_from("<I", h, 0x34)[0]
@@ -413,14 +435,20 @@ class Ad1Image:
     def __init__(self, path):
         self.path = path
         self.segments = Ad1Segments(path)
-        self.segment_paths = list(self.segments.paths)
-        self.size = self.segments.size
-        self.bytes_per_sector = 512
-        self.header = {}
-        self.stored_md5 = None
-        self.stored_sha1 = None
-        self._pos = 0
-        self.image = Ad1(self.segments)
+        try:
+            self.segment_paths = list(self.segments.paths)
+            self.size = self.segments.size
+            self.bytes_per_sector = 512
+            self.header = {}
+            self.stored_md5 = None
+            self.stored_sha1 = None
+            self._pos = 0
+            self.image = Ad1(self.segments)
+        except BaseException:
+            # Otherwise a logical image the segments reject leaves them
+            # held open, which on Windows keeps the evidence files locked.
+            self.segments.close()
+            raise
         self.findings = (list(self.image.attributes.get("findings", []) or [])
                          + list(self.image.findings))
         self.findings.append(

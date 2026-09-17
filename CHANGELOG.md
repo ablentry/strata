@@ -23,6 +23,11 @@ records, not how the code changed.
   wrong offset ([#19](https://github.com/switch-nz/strata/issues/19)).
 
 ### Fixed
+- A damaged AD1's chunk size, if implausible, is no longer trusted for how
+  much to allocate when a chunk fails to decompress; a header cut short
+  before its own declared fields end is now refused instead of raising an
+  unhandled error. A rejected AD1 no longer leaves its files held open,
+  which on Windows kept them locked.
 - A contiguous exFAT stream no longer builds one list entry per cluster to
   find its extent. A corrupted stream length on a large genuine volume could
   ask for hundreds of millions of entries, which was slow enough to look like
