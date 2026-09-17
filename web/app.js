@@ -9082,7 +9082,11 @@ $('#btn-tag-export').addEventListener('click', async () => {
       const t = items[i];
       if (t.is_dir) continue;
       const r = await api.post('export/file', { part: t.part, node: t.node,
-                                                name: t.name, path: t.path });
+                                                name: t.name, path: t.path,
+                                                size: t.size, deleted: !!t.deleted,
+                                                modified: t.modified,
+                                                accessed: t.accessed,
+                                                created: t.file_created });
       if (r.error) failed++; else ok++;
     }
   } finally { busy.close(); }

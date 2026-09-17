@@ -189,7 +189,12 @@ Agreeing with another tool is agreement, not verification.
       interface.
 - [ ] Gallery thumbnails load the full-size image for every picture.
 - [ ] The content index is rebuilt in full each time; there is no incremental
-      update.
+      update. Confirmed and quantified (#85): the whole tree is walked into
+      one in-memory list before anything is written, at roughly 500 bytes
+      and 8 µs per entry regardless of content size — about 2.5 GB and 40+
+      seconds of walking alone at the 5,000,000-entry collection ceiling,
+      before a single file is read. A streaming walk that writes as it goes
+      removes both costs together (#81).
 - [ ] Tagged items are keyed on the filesystem handle (MFT record / inode):
       stable within an image, but a tag will not follow the same volume
       re-acquired into another image.
@@ -204,14 +209,3 @@ Agreeing with another tool is agreement, not verification.
 - **Fuzz corpus growth.** The saved corpus is small; a standing fuzz job with
   coverage feedback would find the next #15 before a user does.
 
----
-
-## Not yet re-checked
-
-Carried from the earlier internal roadmap but not yet confirmed against the
-current code, so neither ticked nor dropped:
-
-- Email message bodies rendered as text rather than raw source.
-- The export manifest leaving `modified` blank when an item is exported by
-  node alone.
-- Indexing time and peak memory on very large NTFS volumes.
