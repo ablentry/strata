@@ -120,10 +120,8 @@ class Exfat(unittest.TestCase):
         self.assertEqual(e["accessed"], "2023-11-05T08:30:44Z")
         self.assertEqual(e["attributes"], ["archive"])
 
-    # Bug: exfat.py ignores the UTC-offset bytes (22-24) — _ts() takes a tz
-    # argument but never uses it — yet labels local times "Z". 10:00 at
-    # +12:00 is 22:00 UTC the previous day.
-    @unittest.expectedFailure
+    # The offset bytes (spec 7.4.10) now shift the local timestamp into UTC:
+    # 10:00 at +12:00 is 22:00 UTC the previous day.
     def test_timestamp_honours_utc_offset(self):
         self.assertEqual(self.root["Timezone.txt"]["created"],
                          "2024-05-31T22:00:00Z")
@@ -305,6 +303,21 @@ class ExfatRobustness(unittest.TestCase):
         self.assertEqual(data[stream], 0xC0)
         struct.pack_into("<Q", data, stream + 24, 64 << 20)
         fs = exfat.ExfatFS(BytesImage(data))
+        e = by_name(fs.listdir(0))["Contiguous.dat"]
+        heap_end = fs.cluster_offset(fs.cluster_count + 2)
+        for r in fs.runs(e):
+            self.assertLessEqual(r["offset"] + r["length"], heap_end)
+
+    # Bug: exfat.py trusts the boot sector's cluster_count (offset 92), so a
+    # 0xFFFFFFFF value defeats the heap-end clamp in chain() (the #17 fix)
+    # and a NoFatChain stream still expands by the billions.
+    def test_cluster_count_bounded_by_image(self):
+        data = bytearray(self.good)
+        struct.pack_into("<I", data, 92, 0xFFFFFFFF)
+        fs = exfat.ExfatFS(BytesImage(data))
+        held = max(0, (len(data) - fs.data_offset) // fs.cluster_size)
+        self.assertEqual(fs.cluster_count, held)
+        self.assertIn("trusting the image", " ".join(fs.findings))
         e = by_name(fs.listdir(0))["Contiguous.dat"]
         heap_end = fs.cluster_offset(fs.cluster_count + 2)
         for r in fs.runs(e):
