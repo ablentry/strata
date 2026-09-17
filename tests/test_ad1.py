@@ -1,0 +1,193 @@
+"""Unit tests for AccessData logical images (engine.ad1, engine.fs.ad1fs),
+fed a single-segment image from imagebuild_ad1."""
+
+import hashlib
+import os
+import sys
+import tempfile
+import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import imagebuild_ad1 as build                                    # noqa: E402
+from engine import ad1, ewf                                       # noqa: E402
+from engine.fs import ad1fs, ntfs                                 # noqa: E402
+
+CS = build.CHUNK_SIZE
+BIG = build.CONTENT["Documents/big.bin"]
+
+
+def by_name(entries):
+    return {e["name"]: e for e in entries}
+
+
+class Ad1Case(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="strata-ad1-test-")
+        self.addCleanup(self._tmp.cleanup)
+
+    def open(self, chunk_mutator=None):
+        data, self.layout = build.build_ad1(chunk_mutator)
+        path = os.path.join(self._tmp.name, "case.ad1")
+        with open(path, "wb") as fh:
+            fh.write(data)
+        img = ewf.open_image(path)
+        self.addCleanup(img.close)
+        fs = ntfs.open_fs(img)
+        source = fs.listdir(0)[0]
+        top = by_name(fs.listdir(source["oid"], "/" + source["name"]))
+        docs = by_name(fs.listdir(top["Documents"]["oid"],
+                                  top["Documents"]["path"]))
+        return img, fs, source, top, docs
+
+
+class Container(Ad1Case):
+    def test_opens_as_ad1(self):
+        img, fs, _, _, _ = self.open()
+        self.assertIsInstance(img, ad1.Ad1Image)
+        self.assertIsInstance(fs, ad1fs.Ad1FS)
+        info = img.info()
+        self.assertEqual(info["format"], "AccessData logical image (AD1)")
+        self.assertEqual(info["segments"], ["case.ad1"])
+        self.assertTrue(info["logical"])
+        self.assertEqual(info["chunk_size"], CS)
+        self.assertEqual(info["acquisition"], {
+            "description": build.IMAGE_NAME, "source_volume": "DATA",
+            "volume_serial": "1A2B-3C4D", "source_os": "Windows 10"})
+        self.assertTrue(any("logical image" in f for f in img.findings))
+
+    def test_source_entry(self):
+        _, _, source, _, _ = self.open()
+        self.assertEqual(source["name"], build.SOURCE_NAME)
+        self.assertEqual(source["tree_slot"], "AD1 1")
+        self.assertEqual(source["filesystem"], "NTFS")
+        self.assertEqual(source["source_size"], 16 << 20)
+        self.assertTrue(source["is_dir"])
+
+    def test_bad_segment_magic_is_refused(self):
+        data, _ = build.build_ad1()
+        with self.assertRaises(ad1.Ad1Error):
+            ad1.Ad1(ewf.OffsetReader(_Bytes(b"X" + data[1:]), 0, len(data)))
+
+
+class Tree(Ad1Case):
+    def setUp(self):
+        super(Tree, self).setUp()
+        self.img, self.fs, self.source, self.top, self.docs = self.open()
+
+    def test_listing(self):
+        self.assertEqual(sorted(self.top), ["Documents", "readme.txt"])
+        self.assertTrue(self.top["Documents"]["is_dir"])
+        self.assertEqual([e["name"] for e in self.fs.listdir(
+            self.top["Documents"]["oid"])],
+            ["big.bin", "empty.txt", "notes.txt"])
+
+    def test_entry_metadata(self):
+        e = self.docs["notes.txt"]
+        data = build.CONTENT["Documents/notes.txt"]
+        self.assertEqual(e["size"], len(data))
+        self.assertEqual(e["created"], "2024-03-15T10:20:31.125Z")
+        self.assertEqual(e["modified"], "2024-03-15T13:45:30.500Z")
+        self.assertEqual(e["accessed"], "2024-03-16T00:00:00.000Z")
+        self.assertEqual(e["md5"], hashlib.md5(data).hexdigest())
+        self.assertEqual(e["sha1"], hashlib.sha1(data).hexdigest())
+        self.assertFalse(e["deleted"])
+
+    def test_file_content(self):
+        for path, data in build.CONTENT.items():
+            name = path.split("/")[-1]
+            e = self.docs[name] if path.startswith("Documents/") \
+                else self.top[name]
+            with self.subTest(path):
+                self.assertEqual(self.fs.read_file(e), data)
+        self.assertEqual(self.fs.read_file(self.docs["big.bin"], 5000),
+                         BIG[:5000])
+
+    def test_read_range_across_chunks(self):
+        e = self.docs["big.bin"]
+        for off, n in ((0, 10), (CS - 5, 10), (CS + 1, 2 * CS),
+                       (2 * CS + 100, 50), (len(BIG) - 3, 10)):
+            with self.subTest(off=off):
+                self.assertEqual(self.fs.read_range(e, off, n),
+                                 BIG[off:off + n])
+        self.assertEqual(self.fs.read_range(e, len(BIG), 10), b"")
+
+    def test_stat_and_verify(self):
+        e = self.docs["big.bin"]
+        st = self.fs.stat(e)
+        self.assertEqual(st["chunks"], build.BIG_CHUNKS)
+        self.assertEqual(len(st["chunk_map"]), build.BIG_CHUNKS)
+        self.assertEqual(st["stored_hashes"]["md5"], hashlib.md5(BIG).hexdigest())
+        got = self.fs.verify(e)
+        self.assertTrue(got["size_ok"])
+        self.assertTrue(got["md5_ok"])
+        self.assertTrue(got["sha1_ok"])
+
+
+class DamagedChunks(Ad1Case):
+    """A chunk of big.bin whose stored zlib stream is cut short or damaged.
+    What was stored cannot come back, but it must be reported, and the
+    chunks after it must stay at their own offsets."""
+
+    @staticmethod
+    def on_chunk(n, fn):
+        def mutate(path, i, comp):
+            return fn(comp) if (path, i) == ("Documents/big.bin", n) else comp
+        return mutate
+
+    def test_verify_notices_a_truncated_chunk(self):
+        _, fs, _, _, docs = self.open(self.on_chunk(1, lambda c: c[:len(c) // 2]))
+        got = fs.verify(docs["big.bin"])
+        self.assertFalse(got["md5_ok"])
+
+    # Bug: engine/ad1.py read_object() appends a chunk that inflated short
+    # as it is, so every later chunk shifts down and the file comes back
+    # short, with no finding.
+    @unittest.expectedFailure
+    def test_truncated_chunk_keeps_later_chunks_in_place(self):
+        img, fs, _, _, docs = self.open(
+            self.on_chunk(1, lambda c: c[:len(c) // 2]))
+        got = fs.read_file(docs["big.bin"])
+        self.assertEqual(len(got), len(BIG))
+        self.assertEqual(got[:CS], BIG[:CS])
+        self.assertEqual(got[2 * CS:], BIG[2 * CS:])
+        self.assertTrue(fs.img.findings)
+
+    # Bug: engine/ad1.py read_range() advances by the length a chunk
+    # inflated to, so a range crossing a short chunk is misaligned.
+    @unittest.expectedFailure
+    def test_range_across_a_truncated_chunk_stays_aligned(self):
+        _, fs, _, _, docs = self.open(
+            self.on_chunk(1, lambda c: c[:len(c) // 2]))
+        got = fs.read_range(docs["big.bin"], CS + 10, 2 * CS)
+        self.assertEqual(len(got), 2 * CS)
+        self.assertEqual(got[CS - 10:], BIG[2 * CS:3 * CS - 10])
+
+    # Bug: engine/ad1.py read_object() falls back to the chunk's raw bytes
+    # when it inflates to nothing, so compressed data is served as content.
+    @unittest.expectedFailure
+    def test_chunk_that_will_not_inflate_is_not_served_raw(self):
+        garbage = b"\x00not a zlib stream\x00" * 8
+        _, fs, _, _, docs = self.open(self.on_chunk(1, lambda c: garbage))
+        got = fs.read_file(docs["big.bin"])
+        self.assertFalse(garbage[:16] in got,
+                         "the chunk's raw bytes are served as content")
+        self.assertEqual(got[CS:2 * CS], bytes(CS))
+        self.assertEqual(got[2 * CS:], BIG[2 * CS:])
+        self.assertTrue(fs.img.findings)
+
+
+class _Bytes(object):
+    bytes_per_sector = 512
+
+    def __init__(self, data):
+        self.data, self.size = data, len(data)
+
+    def read_at(self, offset, length):
+        if offset < 0 or length <= 0 or offset >= self.size:
+            return b""
+        return self.data[offset:offset + length]
+
+
+if __name__ == "__main__":
+    unittest.main()
