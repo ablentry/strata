@@ -11,6 +11,37 @@ records, not how the code changed.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-17
+
+A security and evidence-integrity release. Upgrade from 0.1.0.
+
+### Security
+
+- **A flat VMDK could make Strata read a file that is not part of the
+  exhibit.** A flat VMDK is a descriptor plus a file holding the disk data,
+  and the descriptor names that file. The name was followed wherever it led:
+  to another file on the examiner's machine, which was then shown, hashed,
+  searched and reported as the disk, or to a network path, which on Windows
+  can send the examiner's credentials to that host. The data file is now read
+  only from beside the descriptor, and any other name is refused before
+  anything is touched
+  ([GHSA-5ww2-4xpg-4jpq](https://github.com/switch-nz/strata/security/advisories/GHSA-5ww2-4xpg-4jpq)).
+  If you opened flat VMDKs from an untrusted source with 0.1.0, check that
+  each one's data file sat beside its descriptor.
+
+### Fixed
+
+- **Previewing or opening a file that is not a case could change it.** An
+  empty file or any SQLite database — a browser history file, for example —
+  had case tables written into it on preview, and was turned into a folder on
+  opening. A case is now only a folder holding `case.sqlite`, recognised
+  without writing to anything, and anything else is refused and left untouched
+  ([#23](https://github.com/switch-nz/strata/issues/23)).
+
+### Known issues
+
+The known issues listed for 0.1.0 still apply.
+
 ## [0.1.0] - 2026-09-17
 
 The first release. Everything is described in the [README](README.md). In
@@ -106,5 +137,6 @@ Corroborate results in these areas with another tool before relying on them.
   ([#15](https://github.com/switch-nz/strata/issues/15),
   [#19](https://github.com/switch-nz/strata/issues/19)).
 
-[Unreleased]: https://github.com/switch-nz/strata/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/switch-nz/strata/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/switch-nz/strata/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/switch-nz/strata/releases/tag/v0.1.0
