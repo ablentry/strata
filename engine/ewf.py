@@ -20,6 +20,16 @@ EVF2_SIG = b"EVF2\x0d\x0a\x81\x00"
 SECTION_DESC = 76
 FILE_HEADER = 13
 
+# Every size below comes from the segment file itself, so each read is bounded
+# by what the format can legitimately hold rather than by what a damaged or
+# hostile descriptor claims.  Real metadata sections are a few KB; EnCase's
+# largest chunk is 32768 sectors.
+MAX_METADATA_SECTION = 1 << 20
+MAX_HEADER_SECTION = 16 << 20
+MAX_CHUNK_SIZE = 64 << 20
+MAX_TABLE_ENTRIES = 1 << 20
+SECTOR_SIZES = (512, 1024, 2048, 4096)
+
 class EwfError(Exception):
     pass
 
@@ -93,7 +103,14 @@ class EwfImage:
         self._cache_max = cache_chunks
         self._io_lock = threading.Lock()
         self._pos = 0
-        self._parse()
+        self._seg_sizes = {}
+        try:
+            self._parse()
+        except BaseException:
+            # Otherwise a failed open leaves the evidence files held open,
+            # which on Windows keeps them locked.
+            self.close()
+            raise
 
     def _fh(self, seg):
         h = self._handles.get(seg)
@@ -101,6 +118,24 @@ class EwfImage:
             h = open(self.segment_paths[seg], "rb")
             self._handles[seg] = h
         return h
+
+    def _seg_size(self, seg):
+        size = self._seg_sizes.get(seg)
+        if size is None:
+            size = os.fstat(self._fh(seg).fileno()).st_size
+            self._seg_sizes[seg] = size
+        return size
+
+    def _read_bounded(self, seg, offset, size, cap):
+        """Read `size` bytes at `offset`, but never past the end of the
+        segment and never more than `cap`.  Returns (data, clipped)."""
+        end = self._seg_size(seg)
+        if offset < 0 or offset >= end:
+            return b"", size > 0
+        want = min(size, end - offset, cap)
+        fh = self._fh(seg)
+        fh.seek(offset)
+        return fh.read(want), want < size
 
     def close(self):
         for h in self._handles.values():
@@ -135,7 +170,7 @@ class EwfImage:
                     self.findings.append("Section chain in segment %d exceeded "
                                          "sane length; stopped." % seg_index)
                     break
-                sec = self._read_section(fh, offset)
+                sec = self._read_section(seg_index, offset)
                 if sec is None:
                     break
                 self.sections.append((seg_index, sec))
@@ -143,19 +178,19 @@ class EwfImage:
                 if sec.type == "sectors":
                     sectors_extent = (sec.data_start, sec.start + sec.size)
                 elif sec.type in ("volume", "disk"):
-                    self._parse_volume(fh, sec)
+                    self._parse_volume(seg_index, sec)
                 elif sec.type == "header2":
-                    self._parse_header(fh, sec, utf16=True)
+                    self._parse_header(seg_index, sec, utf16=True)
                 elif sec.type == "header":
                     if not self.header:
-                        self._parse_header(fh, sec, utf16=False)
+                        self._parse_header(seg_index, sec, utf16=False)
                 elif sec.type == "table":
                     pending_table = sec
-                    self._parse_table(fh, sec, seg_index, sectors_extent)
+                    self._parse_table(sec, seg_index, sectors_extent)
                 elif sec.type == "digest":
-                    self._parse_digest(fh, sec)
+                    self._parse_digest(seg_index, sec)
                 elif sec.type == "hash":
-                    self._parse_hash(fh, sec)
+                    self._parse_hash(seg_index, sec)
 
                 if sec.type in ("next", "done"):
                     break
@@ -174,10 +209,13 @@ class EwfImage:
         if self.size == 0:
             self.size = len(self.chunks) * self.chunk_size
 
-    def _read_section(self, fh, offset):
-        fh.seek(offset)
-        raw = fh.read(SECTION_DESC)
+    def _read_section(self, seg, offset):
+        raw, _ = self._read_bounded(seg, offset, SECTION_DESC, SECTION_DESC)
         if len(raw) < SECTION_DESC:
+            if offset >= self._seg_size(seg):
+                self.findings.append(
+                    "Section pointer %d is past the end of segment %d; "
+                    "stopped." % (offset, seg))
             return None
         type_ = raw[0:16].split(b"\x00")[0].decode("ascii", "replace")
         next_offset, size = struct.unpack("<QQ", raw[16:32])
@@ -190,9 +228,17 @@ class EwfImage:
             return None
         return Section(type_, offset, next_offset, size)
 
-    def _parse_volume(self, fh, sec):
-        fh.seek(sec.data_start)
-        data = fh.read(sec.data_size)
+    def _section_data(self, seg, sec, cap):
+        data, clipped = self._read_bounded(seg, sec.data_start, sec.data_size,
+                                           cap)
+        if clipped:
+            self.findings.append(
+                "Section '%s' at %d declares %d bytes; only %d were read."
+                % (sec.type, sec.start, sec.data_size, len(data)))
+        return data
+
+    def _parse_volume(self, seg, sec):
+        data = self._section_data(seg, sec, MAX_METADATA_SECTION)
         if len(data) < 52:
             self.findings.append("Volume section too short to parse.")
             return
@@ -203,12 +249,21 @@ class EwfImage:
         self.sector_count = struct.unpack("<Q", data[16:24])[0]
         self.media_flags = data[36]
         self.compression_level = data[52] if len(data) > 52 else 0
+        if self.bytes_per_sector not in SECTOR_SIZES:
+            self.findings.append(
+                "Volume section declares %d bytes per sector; using 512."
+                % self.bytes_per_sector)
+            self.bytes_per_sector = 512
+        if self.sectors_per_chunk * self.bytes_per_sector > MAX_CHUNK_SIZE:
+            self.findings.append(
+                "Volume section declares %d sectors per chunk; using 64."
+                % self.sectors_per_chunk)
+            self.sectors_per_chunk = 64
         self.chunk_size = self.sectors_per_chunk * self.bytes_per_sector
         self._declared_chunks = chunk_count
 
-    def _parse_header(self, fh, sec, utf16):
-        fh.seek(sec.data_start)
-        blob = fh.read(sec.data_size)
+    def _parse_header(self, seg, sec, utf16):
+        blob = self._section_data(seg, sec, MAX_HEADER_SECTION)
         text, over = inflate_capped(blob, 1 << 20)
         if over:
             self.findings.append("Header section inflates to more than 1 MB; "
@@ -237,9 +292,8 @@ class EwfImage:
                         self.header[names.get(k, k)] = v
                 break
 
-    def _parse_table(self, fh, sec, seg_index, sectors_extent):
-        fh.seek(sec.data_start)
-        head = fh.read(24)
+    def _parse_table(self, sec, seg_index, sectors_extent):
+        head, _ = self._read_bounded(seg_index, sec.data_start, 24, 24)
         if len(head) < 24:
             self.findings.append("Table section header truncated.")
             return
@@ -248,11 +302,12 @@ class EwfImage:
         stored = struct.unpack("<I", head[20:24])[0]
         if zlib.adler32(head[:20]) & 0xFFFFFFFF != stored:
             self.findings.append("Table header checksum mismatch at %d." % sec.start)
-        if entry_count == 0 or entry_count > 0x0FFFFFFF:
+        if entry_count == 0 or entry_count > MAX_TABLE_ENTRIES:
             self.findings.append("Table entry count %d is implausible." % entry_count)
             return
 
-        raw = fh.read(entry_count * 4)
+        raw, _ = self._read_bounded(seg_index, sec.data_start + 24,
+                                    entry_count * 4, entry_count * 4)
         if len(raw) < entry_count * 4:
             self.findings.append("Table entries truncated at %d." % sec.start)
             entry_count = len(raw) // 4
@@ -276,9 +331,8 @@ class EwfImage:
                 length = self.chunk_size + 4
             self.chunks.append(Chunk(seg_index, off, length, compressed))
 
-    def _parse_digest(self, fh, sec):
-        fh.seek(sec.data_start)
-        d = fh.read(sec.data_size)
+    def _parse_digest(self, seg, sec):
+        d = self._section_data(seg, sec, MAX_METADATA_SECTION)
         if len(d) >= 36:
             md5, sha1 = d[0:16], d[16:36]
             if any(md5):
@@ -286,9 +340,8 @@ class EwfImage:
             if any(sha1):
                 self.stored_sha1 = sha1.hex()
 
-    def _parse_hash(self, fh, sec):
-        fh.seek(sec.data_start)
-        d = fh.read(sec.data_size)
+    def _parse_hash(self, seg, sec):
+        d = self._section_data(seg, sec, MAX_METADATA_SECTION)
         if len(d) >= 16 and any(d[0:16]) and not self.stored_md5:
             self.stored_md5 = d[0:16].hex()
 
@@ -300,10 +353,19 @@ class EwfImage:
         if index < 0 or index >= len(self.chunks):
             return b""
         c = self.chunks[index]
+        # A stored chunk is at most the chunk plus its checksum; a compressed
+        # one can exceed that only by zlib's small worst-case expansion.
+        cap = self.chunk_size + self.chunk_size // 64 + 64
         with self._io_lock:
-            fh = self._fh(c.seg)
-            fh.seek(c.offset)
-            raw = fh.read(c.length)
+            raw, _ = self._read_bounded(c.seg, c.offset, c.length, cap)
+        # Running into the end of the segment is not itself remarkable (a
+        # final chunk sized from the nominal chunk size does); a length past
+        # what any chunk can be, or an offset outside the file, is.
+        if c.length > cap or c.offset >= self._seg_size(c.seg):
+            self.findings.append(
+                "Chunk %d declares %d bytes at offset %d in segment %d; "
+                "only %d could be read." % (index, c.length, c.offset, c.seg,
+                                            len(raw)))
         if c.compressed:
             data, over = inflate_capped(raw, self.chunk_size)
             if over:
