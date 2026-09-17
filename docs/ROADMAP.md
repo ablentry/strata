@@ -16,12 +16,6 @@ Legend — `[ ]` not started · `[~]` partly there
 A forensic tool's worst failure is a confident wrong answer, so this comes
 before anything new.
 
-- [~] **Damaged input that exhausts memory**
-      ([#15](https://github.com/switch-nz/strata/issues/15)). The fuzzer's
-      findings are fixed; one residual remains — a contiguous exFAT run is
-      still built one list element per cluster, so a corrupt stream length on
-      a large genuine volume can ask for millions of entries. Representing
-      contiguous runs as `(start, count)` removes it.
 - [x] Previewing a genuine case can still upgrade its schema or create its
       `cache/` folder. It writes only to Strata's own record, never to
       evidence, but a preview should not write at all.

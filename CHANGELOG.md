@@ -23,6 +23,11 @@ records, not how the code changed.
   wrong offset ([#19](https://github.com/switch-nz/strata/issues/19)).
 
 ### Fixed
+- A contiguous exFAT stream no longer builds one list entry per cluster to
+  find its extent. A corrupted stream length on a large genuine volume could
+  ask for hundreds of millions of entries, which was slow enough to look like
+  a hang; the extent is now computed directly, regardless of its length
+  ([#43](https://github.com/switch-nz/strata/issues/43)).
 - **Previewing a case no longer writes to it.** Opening a case to peek at
   it — the case picker in the Open dialog — upgraded old schemas, created a
   `cache/` folder with an empty content index in it, and could add audit
