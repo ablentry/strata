@@ -13,6 +13,13 @@ records, not how the code changed.
 
 ### Added
 
+- **ext4 extended attributes beyond the inline file-data one are now
+  read.** Only the in-inode `system.data` attribute (inline file content
+  kept in the same entry format) was read; every other attribute — other
+  in-inode entries, and anything in an external xattr block reached via
+  `i_file_acl` — was invisible. Every attribute is now listed with its
+  namespace prefix and value, size-capped, in the file inspector
+  ([#52](https://github.com/switch-nz/strata/issues/52)).
 - **A duplicate-files report finds a digest seen under more than one
   evidence item.** Digests were cached per file but never compared across
   evidence items, so a file appearing in two exhibits went unnoticed. "Find
