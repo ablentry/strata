@@ -173,7 +173,6 @@ Agreeing with another tool is agreement, not verification.
 
 ## Performance and debt
 
-- [ ] Gallery thumbnails load the full-size image for every picture.
 - [ ] Tagged items are keyed on the filesystem handle (MFT record / inode):
       stable within an image, but a tag will not follow the same volume
       re-acquired into another image.

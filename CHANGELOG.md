@@ -13,6 +13,13 @@ records, not how the code changed.
 
 ### Added
 
+- **Gallery thumbnails no longer load the full-size image for every
+  picture.** A photo's own embedded EXIF thumbnail — what most camera
+  and phone photos already carry, typically a few KB against a
+  multi-MB original — is used when present. An image with no embedded
+  thumbnail (a screenshot, a thumbnail-less JPEG) falls back to the
+  full-size read exactly as before; nothing is invented for it
+  ([#80](https://github.com/switch-nz/strata/issues/80)).
 - **The Run Artefacts picker now hints at what is actually there before
   you run anything.** Recycle Bin, Prefetch and browser-profile presence
   are checked with one or two directory reads each — no parsing, no

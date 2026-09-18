@@ -2433,6 +2433,11 @@ function fileURL(entry, part) {
   return `/api/file?${q}`;
 }
 
+function thumbnailURL(entry, part) {
+  const q = new URLSearchParams({ part: part.offset, entry: JSON.stringify(entry) });
+  return `/api/thumbnail?${q}`;
+}
+
 function dirSet(name, meta, html) {
   $('#dir-name').textContent = name;
   $('#dir-meta').textContent = meta || '';
@@ -2732,7 +2737,8 @@ function renderDirView() {
                        .filter(([e]) => !e.is_dir && IMG_RE.test(e.name));
   const shotsHTML = (from, to) => shots.slice(from, to).map(([e, i]) => `
         <figure class="dv-shot" data-i="${i}">
-          <img loading="lazy" alt="" src="${fileURL(e, part)}">
+          <img loading="lazy" alt="" src="${thumbnailURL(e, part)}"
+               data-full="${esc(fileURL(e, part))}">
           <figcaption class="${e.deleted ? 'is-del' : ''}"
             title="${esc(e.name)}">${esc(e.name)}</figcaption>
         </figure>`).join('');
@@ -2810,6 +2816,17 @@ function renderDirView() {
     const el = rowUnder(ev.target);
     if (el) menu(el, ev);
   });
+  // Thumbnails try the (much cheaper) embedded EXIF thumbnail first; img
+  // error events don't bubble, so this listens on the capture phase to
+  // catch them from any <img> under bodyEl, including ones grow() adds
+  // later. data-retried guards against looping if the full image 404s too.
+  bodyEl?.addEventListener('error', ev => {
+    const img = ev.target;
+    if (img.tagName === 'IMG' && img.dataset.full && !img.dataset.retried) {
+      img.dataset.retried = '1';
+      img.src = img.dataset.full;
+    }
+  }, true);
 
   if (bodyEl && shown < total) {
     let drawn = shown;

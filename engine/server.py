@@ -1274,6 +1274,20 @@ class Handler(BaseHTTPRequestHandler):
             ctype = _sniff_mime(region.read_at(0, 64))
             return self._send_range_region(region, size, ctype)
 
+        if path == "/api/thumbnail":
+            off = self._q("part", 0, int)
+            fs = s.fs(off)
+            entry = json.loads(self._q("entry", "{}"))
+            try:
+                sample = fs.read_file(entry, 1 << 20)
+            except Exception:
+                sample = None
+            thumb = exif_mod.thumbnail(sample) if sample else None
+            if not thumb:
+                return self._send(404,
+                                  {"error": _t("server.thumbnail.no_thumbnail")})
+            return self._send_range(thumb, _sniff_mime(thumb))
+
         if path == "/api/document":
             off = self._q("part", 0, int)
             fs = s.fs(off)

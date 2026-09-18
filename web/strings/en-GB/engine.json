@@ -229,6 +229,7 @@
   "server.tag.nothing_tag": "Nothing to tag.",
   "server.tag.tag_needs_name": "A tag needs a name.",
   "server.task.such_task": "No such task.",
+  "server.thumbnail.no_thumbnail": "No embedded thumbnail.",
   "server.timeline.bad_cursor": "The position in the timeline could not be read.",
   "server.timeline.bad_key": "That is not a timeline this case can hold.",
   "server.timeline.bad_range": "A time range needs a start before its end.",
