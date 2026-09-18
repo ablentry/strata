@@ -160,9 +160,6 @@ Agreeing with another tool is agreement, not verification.
 - [ ] Read-only mode that refuses export and report writing.
 - [ ] Ask before re-running an artefact replaces its earlier result — fine on a
       first pass, wrong once someone has worked from the earlier output.
-- [ ] Cheap artefact *presence* checks that could honestly run on open — is
-      there a Recycle Bin with content, a browser profile, a prefetch folder —
-      as counts rather than parses.
 - [ ] Template editor, so an examiner can define a structure without Python.
       The templates in `engine/structure.py` are already declarative enough to
       make this mostly an interface problem.
