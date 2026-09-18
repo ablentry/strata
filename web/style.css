@@ -1746,6 +1746,16 @@ tr.is-typemis td.nm { color: var(--alarm); }
   padding: 0 4px; margin-left: 5px; text-transform: uppercase;
   letter-spacing: .06em;
 }
+tr.is-match-known_bad td.nm { color: var(--alarm); }
+tr.is-match-notable td.nm { color: var(--amber); }
+tr.is-match-known_good td.nm { color: var(--good); }
+.hash-flag {
+  border: 1px solid; font-size: 9px; padding: 0 4px; margin-left: 5px;
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.hash-flag.known_bad { color: var(--alarm); border-color: var(--alarm); }
+.hash-flag.notable { color: var(--amber); border-color: var(--amber); }
+.hash-flag.known_good { color: var(--good); border-color: var(--good); }
 
 .regrep { border: 1px solid var(--line); margin-bottom: 10px; }
 .regrep-head {

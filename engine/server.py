@@ -1376,7 +1376,8 @@ class Handler(BaseHTTPRequestHandler):
             if not s.case or s.evidence_id is None:
                 return self._send(200, {"map": {}})
             return self._send(200, {
-                "map": s.case.hash_map(s.evidence_id, self._q("part", 0, int))})
+                "map": hashing_mod.matched_hash_map(
+                    s.case, s.evidence_id, self._q("part", 0, int))})
 
         if path == "/api/attack":
             cat = None
@@ -2378,6 +2379,12 @@ class Handler(BaseHTTPRequestHandler):
                         progress=(lambda f, i=i: progress((i + f) / n)))
                     if got.get("error"):
                         return got
+                    if s.case and s.evidence_id is not None:
+                        matched = hashing_mod.matched_hash_map(
+                            s.case, s.evidence_id, p["offset"])
+                        if matched:
+                            hashing_mod.annotate_hits(
+                                got.get("hits") or [], matched)
                     for h in got.get("hits") or []:
                         h["part"] = p["offset"]
                         h["volume"] = p.get("slot")
