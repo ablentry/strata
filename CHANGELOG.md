@@ -22,6 +22,15 @@ records, not how the code changed.
   size differs from the others is reported, since data after it may be at the
   wrong offset ([#19](https://github.com/switch-nz/strata/issues/19)).
 
+- **LUKS2 volumes with Argon2 keyslots unlock by password.** Argon2d,
+  Argon2i and Argon2id (RFC 9106) are implemented in Python from the RFC's
+  test vectors, so a LUKS2 volume whose keyslots use Argon2 now opens where
+  it was previously refused. The derived key is cached per slot for the
+  session, so reopening the volume does not pay the derivation cost again.
+  Note that Argon2 key derivation in Python is slow: deriving a key with
+  typical parameters (64 MiB, 3 passes) takes on the order of tens of
+  seconds per attempt, and a progress bar shows the work.
+
 ### Fixed
 - A damaged AD1's chunk size, if implausible, is no longer trusted for how
   much to allocate when a chunk fails to decompress; a header cut short

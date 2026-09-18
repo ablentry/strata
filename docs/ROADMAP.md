@@ -67,8 +67,10 @@ recognised and refused by name today; these entries are about *reading* it.
       recovery key, so neither can be used yet.
 - [ ] **BitLocker with the Elephant diffuser** — Vista and Windows 7 volumes
       are identified and refused rather than decrypted wrongly.
-- [ ] **LUKS2 with Argon2** — needs a standard-library-only Argon2, which is
-      the hard part; the rest of LUKS2 is the same shape as LUKS1.
+- [ ] **LUKS2 with Argon2 against real cryptsetup images** — implemented and
+      verified against synthetic images built to cryptsetup's layout; real
+      cryptsetup-written volumes still need to be confirmed before this can
+      be called done.
 - [ ] **FileVault 2** (APFS and Core Storage).
 
 ---
