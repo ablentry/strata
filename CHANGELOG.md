@@ -23,6 +23,18 @@ records, not how the code changed.
   wrong offset ([#19](https://github.com/switch-nz/strata/issues/19)).
 
 ### Fixed
+- **The mail viewer crashed on a PST message with a sender or recipient.**
+  PST gives a single formatted address string per field where mbox gives a
+  list, and the viewer assumed every message used mbox's shape, so any PST
+  message with a `From` or `To` failed to render at all. Both shapes are
+  now handled.
+- **A message's body was never shown.** mbox and PST both decode a
+  message's text server-side already, but the mail viewer only ever listed
+  headers — clicking a message did nothing. A message can now be opened to
+  read its plain-text body (or, for an HTML-only message, its visible text
+  with the markup stripped out — never rendered as HTML) and its attachment
+  names
+  ([#93](https://github.com/switch-nz/strata/issues/93)).
 - **A tagged, deleted, contiguous exFAT file could export the wrong content.**
   exFAT reads a NoFatChain stream by its extent, not by walking the FAT —
   the same fix #91 made for FAT and ext4's `deleted` flag, but keyed on a
