@@ -23,6 +23,13 @@ records, not how the code changed.
   wrong offset ([#19](https://github.com/switch-nz/strata/issues/19)).
 
 ### Fixed
+- **A tagged, deleted, contiguous exFAT file could export the wrong content.**
+  exFAT reads a NoFatChain stream by its extent, not by walking the FAT —
+  the same fix #91 made for FAT and ext4's `deleted` flag, but keyed on a
+  different field this format never carried through a tag. Tagged items now
+  record whether an exFAT stream is contiguous, so re-exporting one by
+  handle alone reads it the way it needs to be read
+  ([#94](https://github.com/switch-nz/strata/issues/94)).
 - A damaged AD1's chunk size, if implausible, is no longer trusted for how
   much to allocate when a chunk fails to decompress; a header cut short
   before its own declared fields end is now refused instead of raising an
