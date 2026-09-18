@@ -90,9 +90,6 @@ recognised and refused by name today; these entries are about *reading* it.
 - [ ] **Legacy Office body text** — Word's piece table, Excel's BIFF stream,
       PowerPoint's records. Properties are read; the body is deliberately left
       unread rather than guessed at.
-- [ ] **ShimCache caveat on screen** — an entry proves a file was examined,
-      not that it ran. The distinction exists in the parser's reasoning but is
-      not shown to the examiner.
 
 ---
 
