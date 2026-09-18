@@ -7847,10 +7847,14 @@ const picked = new Set();
 
 const COST_RANK = { instant: 0, quick: 1, minutes: 2, long: 3 };
 
+let pickerPresence = {};
+
 async function openPicker() {
   if (!S.open) return toast(txt('messages.toast.open_evidence_first'));
-  const r = await api.get('artifacts');
+  const [r, presence] = await Promise.all([
+    api.get('artifacts'), api.get('artifacts/presence')]);
   pickerRows = r.artifacts || [];
+  pickerPresence = presence || {};
   if (!picked.size) {
     const ok = new Set(pickerRows.filter(a => a.available !== false)
                                  .map(a => a.id));
@@ -7858,6 +7862,20 @@ async function openPicker() {
   }
   renderPicker();
   $('#dlg-picker').showModal();
+}
+
+function presenceHint(id) {
+  const p = pickerPresence;
+  if (id === 'recyclebin' && p.recyclebin?.found) {
+    return txt('ui.presence.recyclebin_found', { count: p.recyclebin.count });
+  }
+  if (id === 'prefetch' && p.prefetch?.found) {
+    return txt('ui.presence.prefetch_found', { count: p.prefetch.count });
+  }
+  if (id === 'browser' && p.browser?.found) {
+    return txt('ui.presence.browser_found', { count: p.browser.profiles.length });
+  }
+  return null;
 }
 
 function renderPicker() {
@@ -7871,6 +7889,7 @@ function renderPicker() {
         <span class="pick-costnote">${esc(groups[cost][0].cost_note)}</span></div>
       ${groups[cost].map(a => {
         const off = a.available === false;
+        const hint = !off && presenceHint(a.id);
         return `
         <label class="pick${off ? ' is-off' : ''}">
           <input type="checkbox" data-id="${esc(a.id)}"
@@ -7879,6 +7898,7 @@ function renderPicker() {
           <span class="pick-body">
             <span class="pick-label">${esc(a.label)}</span>
             <span class="pick-answers">${esc(a.answers)}</span>
+            ${hint ? `<span class="pick-presence">${esc(hint)}</span>` : ''}
             ${off ? `<span class="pick-why">${
               esc(a.unavailable_because || 'Not available for this image.')
             }</span>` : ''}
