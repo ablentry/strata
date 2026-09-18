@@ -1200,6 +1200,36 @@ class Handler(BaseHTTPRequestHandler):
             v.pop("truncated", None)
             return self._send(200, v)
 
+        if path == "/api/mail/attachment":
+            off = self._q("part", 0, int)
+            fs = s.fs(off)
+            entry = json.loads(self._q("entry", "{}"))
+            data = fs.read_file(entry, 512 << 20)
+            p = pst_mod.open_pst(data) if pst_mod.looks_like_pst(data[:8]) \
+                else None
+            if p is None:
+                return self._send(400,
+                                  {"error": _t("server.mail.not_pst")})
+            node = p.nbt().get(self._q("msg", -1, int))
+            if not node:
+                return self._send(404,
+                                  {"error": _t("server.mail.no_message")})
+            att_nid = self._q("att", -1, int)
+            content = p.attachment_bytes(node, att_nid)
+            if content is None:
+                return self._send(404,
+                                  {"error": _t("server.mail.no_attachment")})
+            ctype = None
+            for a in p.attachments(node):
+                if a.get("nid") == att_nid:
+                    ctype = a.get("content_type")
+                    break
+            return self._send(200, {
+                "bytes": len(content), "content_type": ctype or _sniff_mime(content),
+                "preview": base64.b64encode(content[:MAX_INLINE]).decode(),
+                "truncated": len(content) > MAX_INLINE,
+            })
+
         if path == "/api/registry/deleted":
             off = self._q("part", 0, int)
             entry = json.loads(self._q("entry", "{}"))
@@ -2832,8 +2862,15 @@ class Handler(BaseHTTPRequestHandler):
                                    "messages": r["count"]})
                     for f in r.get("findings") or []:
                         findings.append("%s: %s" % (e.get("path"), f))
+                    store_entry = {
+                        "name": e.get("name"), "path": e.get("path"),
+                        "size": e.get("size"), "deleted": e.get("deleted"),
+                        "mft": e.get("mft"), "inode": e.get("inode"),
+                        "oid": e.get("oid"),
+                        "start_cluster": e.get("start_cluster")}
                     for m in r["messages"]:
                         m["store"] = e.get("path")
+                        m["store_entry"] = store_entry
                         messages.append(m)
                 progress(1.0)
                 messages.sort(key=lambda m: m.get("date") or "", reverse=True)

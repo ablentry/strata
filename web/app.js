@@ -6463,15 +6463,58 @@ function mailDetailHtml(m) {
     unparsed: `<p class="empty">This message could not be parsed.</p>`,
     none: `<p class="empty">No body text recorded for this message.</p>`,
   }[body.kind];
-  const atts = (m.attachments || []).map(a => `<div class="mail-att">${
-    esc(a.filename || '(unnamed)')}${a.content_type ? ' · ' + esc(a.content_type) : ''
-    }${a.bytes ? ' · ' + fmt.bytes(a.bytes) : ''}</div>`).join('');
+  const atts = (m.attachments || []).map((a, i) => {
+    const label = `${esc(a.filename || a.name || '(unnamed)')}${
+      a.content_type ? ' · ' + esc(a.content_type) : ''}${
+      (a.bytes ?? a.size) ? ' · ' + fmt.bytes(a.bytes ?? a.size) : ''}`;
+    if (a.nid == null) return `<div class="mail-att">${label}</div>`;
+    return `<div class="mail-att">
+      <button class="linkish mail-load-att" data-i="${i}">${label} — view</button>
+    </div>`;
+  }).join('');
   return `<div class="mail-detail">
     <div class="mail-headers">${rows.map(([k, v]) =>
       `<div><strong>${k}:</strong> ${esc(v)}</div>`).join('')}</div>
     ${bodyHtml}
     ${atts ? `<div class="mail-attachments">${atts}</div>` : ''}
   </div>`;
+}
+
+async function loadMailAttachment(btn, m, part) {
+  const a = (m.attachments || [])[+btn.dataset.i];
+  const holder = btn.closest('.mail-att');
+  btn.disabled = true;
+  btn.textContent = txt('ui.render_registry.loading_value');
+  const r = await api.get('mail/attachment', {
+    part, entry: JSON.stringify(m.store_entry), msg: m.nid, att: a.nid,
+  });
+  btn.remove();
+  if (r.error) {
+    holder.insertAdjacentHTML('beforeend',
+      `<p class="hint warn">${esc(r.error)}</p>`);
+    return;
+  }
+  const bytes = Uint8Array.from(atob(r.preview || ''), c => c.charCodeAt(0));
+  if (!bytes.length) {
+    holder.insertAdjacentHTML('beforeend',
+      `<p class="empty">${txt('ui.content_show')}</p>`);
+    return;
+  }
+  const kind = sniff(bytes);
+  let body;
+  if (kind?.raster || (kind?.kind === 'image' && kind.mime)) {
+    body = `<div class="pv-image"><img alt="" src="data:${
+      kind.mime};base64,${r.preview}"></div>`;
+  } else if (looksTextual(bytes)) {
+    body = `<pre class="pv-text">${escText(decodeText(bytes).slice(0, 20000))}</pre>`;
+  } else {
+    body = `<p class="pv-note">${txt('help.mail_attachment_no_inline_viewer', {
+      content_type: esc(r.content_type || 'application/octet-stream'),
+      size: fmt.bytes(r.bytes) })}${
+      r.truncated ? ' (preview truncated)' : ''}</p>`;
+  }
+  holder.insertAdjacentHTML('beforeend',
+    `<div class="mail-att-preview">${body}</div>`);
 }
 
 function renderMail(r, part) {
@@ -6512,7 +6555,12 @@ function renderMail(r, part) {
     const open = el.querySelector('.mail-detail');
     if (open) { open.remove(); return; }
     $$('.mail-detail', box).forEach(n => n.remove());
-    el.insertAdjacentHTML('beforeend', mailDetailHtml(msgs[+el.dataset.i]));
+    const m = msgs[+el.dataset.i];
+    el.insertAdjacentHTML('beforeend', mailDetailHtml(m));
+    $$('.mail-load-att', el).forEach(btn => btn.addEventListener('click', ev2 => {
+      ev2.stopPropagation();
+      loadMailAttachment(btn, m, part);
+    }));
   });
   tabCount('triage', msgs.length);
 }

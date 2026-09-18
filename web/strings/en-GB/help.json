@@ -44,6 +44,7 @@
       "other": "{count} mail stores found ({kinds}), but no messages could be read from them."
     }
   },
+  "mail_attachment_no_inline_viewer": "{content_type}, {size}. No inline viewer for this type.",
   "mail_stores_identified_content_rather_extension_msg": "Mail stores are identified by content rather than by extension — .msg on a Windows volume is more often a resource file than a message.",
   "mark.working_marks_used_navigate_do_not": "Working marks used to navigate do not belong in a report.\n      Marks left out are still kept in the case and the audit log, and the\n      report says how many were held back.",
   "marks": {
