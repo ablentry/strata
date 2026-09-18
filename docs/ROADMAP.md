@@ -187,8 +187,6 @@ Agreeing with another tool is agreement, not verification.
 
 - [ ] `/api/file` reads the whole file again on every Range request (up to the
       stream cap). Wants a cached extent map before anyone scrubs a large video.
-- [ ] Registry values over 2 KB are not inlined and have no fetch path in the
-      interface.
 - [ ] Gallery thumbnails load the full-size image for every picture.
 - [ ] The content index is rebuilt in full each time; there is no incremental
       update. Confirmed and quantified (#85): the whole tree is walked into

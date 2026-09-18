@@ -211,6 +211,7 @@
   "server.recurse.label": "Listing everything below %s",
   "server.registry.registry_hive": "Not a registry hive.",
   "server.registry.such_key": "No such key: %s",
+  "server.registry.such_value": "No such value.",
   "server.render.nothing_here_needs_sanitising": "Nothing here needs sanitising; use /api/file.",
   "server.render.pdf_could_made_inert": "This PDF could not be made inert, so it will not be rendered.",
   "server.report.unknown_route": "Unknown route.",

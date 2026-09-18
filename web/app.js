@@ -3623,7 +3623,11 @@ function renderRegistry(r) {
       <tbody>${r.values.map(v => `<tr class="${v.deleted ? 'is-del' : ''}">
         <td class="nm">${esc(v.name)}</td>
         <td class="ty">${esc(v.type)}</td>
-        <td class="dv" title="${esc(regValueText(v))}">${esc(regValueText(v))}</td>
+        <td class="dv"${v.truncated ? '' : ` title="${esc(regValueText(v))}"`}>${
+          v.truncated
+            ? `<button class="linkish reg-load-value" data-offset="${v.offset}">${
+                esc(regValueText(v))} — load</button>`
+            : esc(regValueText(v))}</td>
       </tr>`).join('')}</tbody>
     </table>` : `<p class="empty">${txt('ui.values_key')}</p>`;
 
@@ -3662,6 +3666,20 @@ function renderRegistry(r) {
   $$('#preview-body .crumb').forEach(el => el.addEventListener('click', () =>
     openRegistry(reg.entry, reg.part, el.dataset.p)));
   $('#reg-del')?.addEventListener('click', showRegistryDeleted);
+  $$('#preview-body .reg-load-value').forEach(el =>
+    el.addEventListener('click', () => loadRegistryValue(el)));
+}
+
+async function loadRegistryValue(el) {
+  const td = el.closest('td');
+  const offset = +el.dataset.offset;
+  td.textContent = txt('ui.render_registry.loading_value');
+  const v = await api.get('registry/value', {
+    part: reg.part.offset, entry: JSON.stringify(reg.entry), offset });
+  if (v.error) { td.textContent = v.error; return; }
+  const text = regValueText(v);
+  td.textContent = text;
+  td.title = text;
 }
 
 async function showRegistryDeleted() {

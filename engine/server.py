@@ -1185,6 +1185,21 @@ class Handler(BaseHTTPRequestHandler):
                 "values": hive.values(k),
             })
 
+        if path == "/api/registry/value":
+            off = self._q("part", 0, int)
+            entry = json.loads(self._q("entry", "{}"))
+            hive = s.hive(off, entry)
+            if hive is None:
+                return self._send(400, {"error": _t("server.registry.registry_hive")})
+            vk_offset = self._q("offset", -1, int)
+            v = hive.value(vk_offset, inline=False)
+            if v is None:
+                return self._send(404, {"error": _t("server.registry.such_value")})
+            raw = hive.value_bytes(vk_offset)
+            v["value"] = hive.decode(v["type_id"], raw)
+            v.pop("truncated", None)
+            return self._send(200, v)
+
         if path == "/api/registry/deleted":
             off = self._q("part", 0, int)
             entry = json.loads(self._q("entry", "{}"))
