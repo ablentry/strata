@@ -1822,6 +1822,7 @@ tr.is-match-known_good td.nm { color: var(--good); }
 .pick-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .pick-label { color: var(--text); }
 .pick-answers { color: var(--dim); font-size: 11px; line-height: 1.45; }
+.pick-presence { color: var(--amber); font-size: 10.5px; }
 .pick-why { color: var(--alarm-text); font-size: 10.5px; }
 
 .pick.is-off { cursor: default; }

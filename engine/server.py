@@ -1721,6 +1721,28 @@ class Handler(BaseHTTPRequestHandler):
                 "note": _t("server.artifacts.cost_what_will_take"),
             })
 
+        if path == "/api/artifacts/presence":
+            ev = s.current
+            agg = {"recyclebin": {"found": False, "count": 0},
+                  "prefetch": {"found": False, "count": 0},
+                  "browser": {"found": False, "profiles": []}}
+            if ev is not None:
+                parts = [p for p in ev.volumes["partitions"]
+                        if p.get("allocated") and p.get("detected")]
+                for p in parts:
+                    try:
+                        fs = s.fs(p["offset"])
+                    except Exception:
+                        continue
+                    got = artifacts_mod.presence(fs, _root_node(fs))
+                    for key in ("recyclebin", "prefetch"):
+                        agg[key]["found"] = agg[key]["found"] or got[key]["found"]
+                        agg[key]["count"] += got[key]["count"]
+                    if got["browser"]["found"]:
+                        agg["browser"]["found"] = True
+                        agg["browser"]["profiles"] += got["browser"]["profiles"]
+            return self._send(200, agg)
+
         if path == "/api/triage":
             return self._send(200, _triage(s))
 

@@ -20,6 +20,12 @@ records, not how the code changed.
   thumbnail (a screenshot, a thumbnail-less JPEG) falls back to the
   full-size read exactly as before; nothing is invented for it
   ([#80](https://github.com/switch-nz/strata/issues/80)).
+- **The Run Artefacts picker now hints at what is actually there before
+  you run anything.** Recycle Bin, Prefetch and browser-profile presence
+  are checked with one or two directory reads each — no parsing, no
+  filesystem walk — and shown as "12 items found" / "3 .pf files found" /
+  "2 browser profiles found" next to the matching row, so a full scan is
+  a choice rather than a guess.
 - **ext4 extended attributes beyond the inline file-data one are now
   read.** Only the in-inode `system.data` attribute (inline file content
   kept in the same entry format) was read; every other attribute — other
