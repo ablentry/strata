@@ -13,6 +13,13 @@ records, not how the code changed.
 
 ### Added
 
+- **Gallery thumbnails no longer load the full-size image for every
+  picture.** A photo's own embedded EXIF thumbnail — what most camera
+  and phone photos already carry, typically a few KB against a
+  multi-MB original — is used when present. An image with no embedded
+  thumbnail (a screenshot, a thumbnail-less JPEG) falls back to the
+  full-size read exactly as before; nothing is invented for it
+  ([#80](https://github.com/switch-nz/strata/issues/80)).
 - **ext4 extended attributes beyond the inline file-data one are now
   read.** Only the in-inode `system.data` attribute (inline file content
   kept in the same entry format) was read; every other attribute — other
