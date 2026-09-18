@@ -146,6 +146,45 @@ def import_hash_set(case, path, name=None, kind="known_bad"):
     res = case.add_hash_set(name, kind, path, digests)
     return {"name": name, "kind": kind, **res}
 
+def matched_hash_map(case, evidence_id, part):
+    """Like case.hash_map, but each already-hashed node also carries
+    match_kind/matches when its digest is in an imported hash set —
+    the same lookup annotate_matches does for a hash run, applied to
+    whatever has been hashed already so folder and search views can
+    show it without hashing anything themselves."""
+    hashes = case.hash_map(evidence_id, part)
+    if not hashes:
+        return hashes
+    digests = []
+    for h in hashes.values():
+        digests += [h.get("md5"), h.get("sha1"), h.get("sha256")]
+    found = case.match_hashes([d for d in digests if d])
+    if not found:
+        return hashes
+    for h in hashes.values():
+        hits = []
+        for algo in ("md5", "sha1", "sha256"):
+            for m in found.get((h.get(algo) or "").lower(), []):
+                if m["algo"] == algo:
+                    hits.append(m)
+        if hits:
+            h["matches"] = hits
+            kinds = {m["kind"] for m in hits}
+            h["match_kind"] = ("known_bad" if "known_bad" in kinds
+                               else "notable" if "notable" in kinds
+                               else "known_good")
+    return hashes
+
+def annotate_hits(hits, matched_map):
+    """Marks each hit whose filesystem node is in matched_map (from
+    matched_hash_map) with its match_kind/matches, in place."""
+    for h in hits:
+        info = matched_map.get(node_key(h))
+        if info and info.get("match_kind"):
+            h["match_kind"] = info["match_kind"]
+            h["matches"] = info["matches"]
+    return hits
+
 def annotate_matches(case, rows):
     digests = []
     for r in rows:

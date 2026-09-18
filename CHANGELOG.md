@@ -13,6 +13,12 @@ records, not how the code changed.
 
 ### Added
 
+- **Hash-set matches now show in the folder and search views, not only in
+  the hash run.** A file already hashed (in this or an earlier run) whose
+  digest is in an imported hash set is flagged directly where it is found —
+  the folder listing and a file-content or file-name search — instead of
+  only in the Hash tab's own results
+  ([#60](https://github.com/switch-nz/strata/issues/60)).
 - **A registry value over 2 KB can now be fetched in full.** It was shown
   in the interface as its size only, with nothing behind it — the parser
   reads the full value already, the interface just had no way to ask for

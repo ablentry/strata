@@ -2514,6 +2514,11 @@ function hashOf(e, which = 'sha256') {
   return h ? h[which] : null;
 }
 
+function matchOf(e) {
+  const h = hashMap.map[nodeOf(e)];
+  return h ? h.match_kind : null;
+}
+
 function glyphFor(e) {
   return e.is_dir ? GLYPH.dir
     : IMG_RE.test(e.name) ? GLYPH.img
@@ -2680,12 +2685,15 @@ function renderDirView() {
     const i = from + n;
     const t = e.type_check;
     const bad = t && t.mismatch;
+    const mk = matchOf(e);
     return `
         <tr data-i="${i}" class="${e._nav ? 'is-nav ' : ''}${
-      e.deleted ? 'is-del' : ''}${bad ? ' is-typemis' : ''}">
+      e.deleted ? 'is-del' : ''}${bad ? ' is-typemis' : ''}${
+      mk ? ' is-match-' + mk : ''}">
           <td class="nm"><span class="g">${e._nav ? '▲' : glyphFor(e)}</span>${
       esc(e.name)}${e._nav ? ` <span class="mis">${esc(e._label)}</span>` : ''}${
-      bad ? ` <span class="mis" title="${esc(t.why)}">renamed?</span>` : ''}</td>
+      bad ? ` <span class="mis" title="${esc(t.why)}">renamed?</span>` : ''}${
+      mk ? ` <span class="hash-flag ${esc(mk)}">${esc(mk.replace('_', ' '))}</span>` : ''}</td>
           ${wide ? `<td class="c-path" title="${esc(e.path || '')}">${
         esc(folderOf(e))}</td>` : ''}
           <td class="sz">${e.is_dir ? '—' : fmt.bytes(e.size)}</td>
@@ -5520,7 +5528,7 @@ function renderFileHits(hits, part, headline, prefix = '') {
   }
   box.innerHTML = prefix + `<div class="results-head">${esc(headline)}</div>` +
     hits.map((h, i) => `
-      <div class="result" data-i="${i}">
+      <div class="result ${h.match_kind ? 'match-' + h.match_kind : ''}" data-i="${i}">
         <div class="top">
           <span class="kind">${esc(
             h.kind === 'usn' ? 'change journal'
@@ -5533,7 +5541,9 @@ function renderFileHits(hits, part, headline, prefix = '') {
             : h.file_offset != null
             ? '+0x' + fmt.hex(h.file_offset, 6) : ''}</span>
         </div>
-        <div class="name ${h.deleted ? 'is-del' : ''}">${esc(h.name || '')}</div>
+        <div class="name ${h.deleted ? 'is-del' : ''}">${esc(h.name || '')}${
+          h.match_kind ? ` <span class="hash-flag ${esc(h.match_kind)}">${
+            esc(h.match_kind.replace('_', ' '))}</span>` : ''}</div>
         <div class="path">${esc(h.path || '')}</div>
         <div class="sub">${esc(h.context || '')}</div>
         <div class="meta">${fmt.bytes(h.size)} · ${fmt.time(h.modified)}${
