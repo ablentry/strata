@@ -13,6 +13,15 @@ FL_INLINE_DATA = 0x10000000
 XATTR_MAGIC = 0xEA020000
 XATTR_SYSTEM = 7
 
+# e_name_index -> the attribute's namespace prefix, per the ext4 kernel
+# source (fs/ext4/xattr.h). Anything not listed here (e.g. 2/3, the POSIX
+# ACL indices, whose complete name is a fixed string rather than
+# prefix+suffix) is shown as "index:name" instead of guessed at.
+XATTR_PREFIX = {0: "", 1: "user.", 4: "trusted.", 6: "security.",
+               XATTR_SYSTEM: "system."}
+
+XATTR_VALUE_CAP = 4096
+
 S_IFMT = 0xF000
 S_IFDIR = 0x4000
 S_IFREG = 0x8000
@@ -38,6 +47,31 @@ def _mode_string(mode):
         bits += ("r" if p & 4 else "-") + ("w" if p & 2 else "-") + \
                 ("x" if p & 1 else "-")
     return kind + bits
+
+def _xattr_entries(buf, entries_start, value_base, limit, max_value, out):
+    """Appends each ext4_xattr_entry found in buf[entries_start:limit] to
+    out, stopping at an all-zero header (the end of the list) or when a
+    header would run past limit. value_base is where e_value_offs counts
+    from: right after the in-inode magic for an in-inode list, or the
+    start of the block for an external xattr block."""
+    i = entries_start
+    while i + 16 <= limit:
+        name_len, index, value_offs, value_inum, value_size = \
+            struct.unpack("<BBHII", buf[i:i + 12])
+        if not name_len and not index and not value_offs:
+            break
+        name = buf[i + 16:i + 16 + name_len].decode("utf-8", "replace")
+        if not value_inum and not (index == XATTR_SYSTEM and name == "data"):
+            v = value_base + value_offs
+            cap = min(value_size, max_value)
+            value = bytes(buf[v:min(len(buf), v + cap)])
+            prefix = XATTR_PREFIX.get(index)
+            label = (prefix + name) if prefix is not None \
+                else "%d:%s" % (index, name)
+            out.append({"name": label, "size": value_size, "value": value,
+                        "truncated": value_size > max_value})
+        i += (16 + name_len + 3) & ~3
+    return out
 
 class Inode:
     def __init__(self, num, raw, fs):
@@ -79,6 +113,38 @@ class Inode:
     @property
     def inline(self):
         return bool(self.flags & FL_INLINE_DATA)
+
+    @property
+    def file_acl(self):
+        """The block holding this inode's external xattrs, or 0 when
+        every attribute (if any) fits in the inode itself."""
+        raw = self.raw
+        lo = struct.unpack("<I", raw[104:108])[0] if len(raw) >= 108 else 0
+        hi = struct.unpack("<H", raw[118:120])[0] if len(raw) >= 120 else 0
+        return lo | (hi << 32)
+
+    def xattrs(self, max_value=XATTR_VALUE_CAP):
+        """Every extended attribute on this file, in-inode and (via
+        file_acl) in its external xattr block, each value read up to
+        max_value bytes. system.data -- inline file data kept in this
+        same entry format, read whole by inline_xattr() for the file's
+        actual content -- is not an attribute an examiner is asking for
+        here, so it is left out."""
+        out = []
+        raw = self.raw
+        start = 128 + self.extra_isize
+        if len(raw) >= start + 4 and \
+                struct.unpack("<I", raw[start:start + 4])[0] == XATTR_MAGIC:
+            first = start + 4
+            _xattr_entries(raw, first, first, len(raw), max_value, out)
+        block = self.file_acl
+        if block:
+            blk = self.fs.source.read_at(block * self.fs.block_size,
+                                         self.fs.block_size)
+            if len(blk) >= 32 and \
+                    struct.unpack("<I", blk[0:4])[0] == XATTR_MAGIC:
+                _xattr_entries(blk, 32, 0, len(blk), max_value, out)
+        return out
 
     def inline_xattr(self):
         """The in-inode "system.data" extended attribute, where inline data
