@@ -50,6 +50,22 @@ records, not how the code changed.
   typical parameters (64 MiB, 3 passes) takes on the order of tens of
   seconds per attempt, and a progress bar shows the work.
 
+### Changed
+
+- **Building the content index no longer walks the whole tree into memory
+  before indexing the first file.** Each file is now read and indexed as
+  the walk reaches it. On a large collection this was measured at
+  roughly 500 bytes and 8 µs per entry regardless of content size — about
+  2.5 GB and 40+ seconds of walking alone at the 5,000,000-entry ceiling,
+  before a single file was read ([#81](https://github.com/switch-nz/strata/issues/81)).
+- **Scrubbing a large video or image no longer re-reads the whole file
+  for every Range request.** `/api/file` read the file again, up to its
+  256 MB stream cap, on each request; it now seeks directly to the
+  requested bytes where the filesystem supports it, or reuses a small
+  file's already-read content for the rest of the session, the same way
+  the hex view already does
+  ([#78](https://github.com/switch-nz/strata/issues/78)).
+
 ### Fixed
 - **A ShimCache entry proves a file was examined, not that it ran — but
   nothing said so next to the results.** The distinction was stated only in

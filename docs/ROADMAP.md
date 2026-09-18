@@ -180,16 +180,7 @@ Agreeing with another tool is agreement, not verification.
 
 ## Performance and debt
 
-- [ ] `/api/file` reads the whole file again on every Range request (up to the
-      stream cap). Wants a cached extent map before anyone scrubs a large video.
 - [ ] Gallery thumbnails load the full-size image for every picture.
-- [ ] The content index is rebuilt in full each time; there is no incremental
-      update. Confirmed and quantified (#85): the whole tree is walked into
-      one in-memory list before anything is written, at roughly 500 bytes
-      and 8 µs per entry regardless of content size — about 2.5 GB and 40+
-      seconds of walking alone at the 5,000,000-entry collection ceiling,
-      before a single file is read. A streaming walk that writes as it goes
-      removes both costs together (#81).
 - [ ] Tagged items are keyed on the filesystem handle (MFT record / inode):
       stable within an image, but a tag will not follow the same volume
       re-acquired into another image.

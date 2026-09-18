@@ -757,8 +757,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _send_range(self, data, ctype):
-        total = len(data)
+    def _parse_range(self, total):
         rng = self.headers.get("Range", "")
         start, end = 0, total - 1
         partial = False
@@ -775,7 +774,9 @@ class Handler(BaseHTTPRequestHandler):
                 start, end = 0, total - 1
             else:
                 partial = True
-        body = data[start:end + 1]
+        return start, end, partial
+
+    def _write_range(self, body, ctype, start, end, total, partial):
         self.send_response(206 if partial else 200)
         self.send_header("Content-Type", ctype)
         self.send_header("Accept-Ranges", "bytes")
@@ -788,6 +789,23 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+    def _send_range(self, data, ctype):
+        total = len(data)
+        start, end, partial = self._parse_range(total)
+        self._write_range(data[start:end + 1], ctype, start, end, total,
+                          partial)
+
+    def _send_range_region(self, region, total, ctype):
+        """Like _send_range, but reads only the bytes a Range request asks
+        for from `region` (a FileRegion) instead of the whole file --
+        region.read_at() already seeks directly via fs.read_range() where
+        the filesystem supports it, or caches a small file's full content
+        across requests rather than re-reading it from the image every
+        time (#78)."""
+        start, end, partial = self._parse_range(total)
+        body = region.read_at(start, end - start + 1) if total else b""
+        self._write_range(body, ctype, start, end, total, partial)
 
     def _body(self):
         n = int(self.headers.get("Content-Length") or 0)
@@ -1242,10 +1260,19 @@ class Handler(BaseHTTPRequestHandler):
             off = self._q("part", 0, int)
             fs = s.fs(off)
             entry = json.loads(self._q("entry", "{}"))
-            size = int(entry.get("size") or 0)
-            data = fs.read_file(entry, min(size or MAX_STREAM, MAX_STREAM))
-            ctype = _sniff_mime(data)
-            return self._send_range(data, ctype)
+            try:
+                info = fs.stat(entry)
+            except Exception:
+                info = {}
+            size = info.get("size")
+            if size is None:
+                size = entry.get("size") or 0
+            size = min(size, MAX_STREAM)
+            cur = s.current
+            region = FileRegion(fs, entry, size, "",
+                                cur.file_bytes if cur is not None else None)
+            ctype = _sniff_mime(region.read_at(0, 64))
+            return self._send_range_region(region, size, ctype)
 
         if path == "/api/document":
             off = self._q("part", 0, int)
