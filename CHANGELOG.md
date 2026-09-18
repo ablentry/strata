@@ -23,6 +23,10 @@ records, not how the code changed.
   wrong offset ([#19](https://github.com/switch-nz/strata/issues/19)).
 
 ### Fixed
+- Opening a tagged, deleted, contiguous exFAT file from the Tags panel (not
+  exporting it — viewing it) could show the wrong content, for the same
+  reason #94 fixed for export: the entry built for the hex view carried
+  `deleted` but not `contiguous`. Both now travel with it.
 - **The mail viewer crashed on a PST message with a sender or recipient.**
   PST gives a single formatted address string per field where mbox gives a
   list, and the viewer assumed every message used mbox's shape, so any PST
