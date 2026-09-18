@@ -1173,6 +1173,24 @@ class Case:
             (evidence_id, part, str(node))).fetchone()
         return dict(r) if r else None
 
+    def duplicate_files(self):
+        """Files whose SHA-256 was seen under more than one evidence item
+        -- only among files a hash run has actually covered, since a
+        digest is never computed implicitly here. Largest group first."""
+        rows = self.db.execute(
+            "SELECT h.* FROM file_hashes h JOIN ("
+            " SELECT sha256 FROM file_hashes"
+            " WHERE sha256 IS NOT NULL AND sha256 != ''"
+            " GROUP BY sha256 HAVING COUNT(DISTINCT evidence_id) > 1"
+            ") dup ON h.sha256 = dup.sha256 "
+            "ORDER BY h.sha256, h.evidence_id, h.part").fetchall()
+        groups = {}
+        for r in rows:
+            groups.setdefault(r["sha256"], []).append(dict(r))
+        out = [{"sha256": k, "items": v} for k, v in groups.items()]
+        out.sort(key=lambda g: len(g["items"]), reverse=True)
+        return out
+
     @_writes
     def add_hash_set(self, name, kind, source, digests):
         self.db.execute(

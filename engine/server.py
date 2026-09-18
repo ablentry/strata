@@ -1459,6 +1459,16 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/hashsets":
             return self._send(200, {"sets": s.case.hash_sets()})
 
+        if path == "/api/hashes/duplicates":
+            if not s.case:
+                return self._send(200, {"groups": []})
+            groups = s.case.duplicate_files()
+            for g in groups:
+                for it in g["items"]:
+                    held = s.items.get(it.get("evidence_id"))
+                    it["exhibit"] = held.label if held else None
+            return self._send(200, {"groups": groups})
+
         if path == "/api/recyclebin":
             part = self._q("part", 0, int)
             fs = s.fs(part)

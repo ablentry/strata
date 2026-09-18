@@ -13,6 +13,13 @@ records, not how the code changed.
 
 ### Added
 
+- **A duplicate-files report finds a digest seen under more than one
+  evidence item.** Digests were cached per file but never compared across
+  evidence items, so a file appearing in two exhibits went unnoticed. "Find
+  duplicates" on the Hashes tab groups files by digest and shows every
+  exhibit and path that shares one — only among files a hash run has
+  already covered, since nothing here hashes a file just to compare it
+  ([#67](https://github.com/switch-nz/strata/issues/67)).
 - **A PST attachment's content can now be viewed, not only its name and
   size.** The mail viewer listed every attachment's filename and size but
   had no way to read what was inside one. Clicking an attachment now
