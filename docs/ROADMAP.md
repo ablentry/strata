@@ -152,7 +152,6 @@ Agreeing with another tool is agreement, not verification.
 
 - [ ] Fuzzy hashing (ssdeep-style) and image similarity.
 - [ ] Carving across fragments, starting with bi-fragment gap carving.
-- [ ] Duplicate detection across evidence items.
 - [ ] A map view for GPS coordinates.
 
 ---

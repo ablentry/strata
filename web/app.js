@@ -5645,6 +5645,40 @@ function renderHashes(r, part) {
   tabCount('hash', r.hashed);
 }
 
+async function doDuplicates() {
+  const box = $('#hash-results');
+  box.innerHTML = `<p class="empty">${txt('ui.preview_entry.reading')}</p>`;
+  const r = await api.get('hashes/duplicates');
+  renderDuplicates(r);
+}
+
+function renderDuplicates(r) {
+  const box = $('#hash-results');
+  const groups = r.groups || [];
+  if (!groups.length) {
+    box.innerHTML = `<p class="empty">${txt('ui.render_duplicates.none_found')}</p>`;
+    tabCount('hash', 0);
+    return;
+  }
+  const totalFiles = groups.reduce((n, g) => n + g.items.length, 0);
+  const summary = txt('ui.render_duplicates.summary',
+    { sets: groups.length, files: totalFiles });
+  box.innerHTML = `<div class="results-head">${esc(summary)}</div>` +
+    groups.map(g => `
+      <div class="result">
+        <div class="top">
+          <span class="kind">${txt('ui.render_duplicates.copies',
+            { count: g.items.length })}</span>
+          <span class="off">${fmt.bytes(g.items[0].size)}</span>
+        </div>
+        <div class="sub mono">${esc(g.sha256.slice(0, 32))}</div>
+        ${g.items.map(it => `<div class="path">${
+          esc(it.exhibit || '?')} — ${esc(it.path || it.name || '')}${
+          it.deleted ? ' <span class="mis">deleted</span>' : ''}</div>`).join('')}
+      </div>`).join('');
+  tabCount('hash', totalFiles);
+}
+
 async function loadHashSets() {
   const r = await api.get('hashsets');
   S.hashSets = r.sets || [];
@@ -9184,6 +9218,7 @@ $('#btn-index-clear').addEventListener('click', async () => {
 $('#find-scope').addEventListener('change', refreshIndexState);
 $('#btn-save-search').addEventListener('click', saveCurrentSearch);
 $('#btn-hash').addEventListener('click', doHash);
+$('#btn-duplicates').addEventListener('click', doDuplicates);
 $('#btn-artifacts').addEventListener('click', () => doArtifacts(true));
 $('#art-scope')?.addEventListener('change', () => { artPick = null; renderArtTree(); });
 

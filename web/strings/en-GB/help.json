@@ -101,6 +101,7 @@
   "techniques_techniques_imported_attributions_already_made_unchanged": "{techniques} techniques imported. Attributions already made are unchanged.",
   "these_reported_because_evidence_about_file_rendering": "These are reported because they are evidence about the file. The rendering below is of the cleaned copy; the bytes on the media are untouched.",
   "timeline.from_tag": "This item could not be found again on its volume, so these events come from what was recorded when it was tagged: three timestamps at most, and no position on the media.",
+  "tree.duplicates_across_evidence_items": "Files whose digest matches across evidence items — only among files an examiner has already hashed, since nothing here hashes a file just to compare it.",
   "tree.every_file_chosen_volume_md5_sha": "Every file on the chosen volume, MD5, SHA-1 and SHA-256\n          in one pass each. Hash a single file or folder by right-clicking it\n          in the tree or the listing.",
   "tz.every_timestamp_stored_utc_stays_way": "Every timestamp is stored in UTC and stays that way. An\n      offset changes only what is shown beside it — nothing recorded is\n      altered, and the choice is written to the audit log.",
   "unpartitioned_space_holds_files_hash_carve_instead": "Unpartitioned space holds no files to hash. Carve it instead.",
