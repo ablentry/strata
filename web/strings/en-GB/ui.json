@@ -545,6 +545,20 @@
   "picker.run_artefacts": "Run artefacts",
   "powerpoint_presentation_pptx": "PowerPoint presentation (.pptx)",
   "prefetch_volume": "No prefetch on this volume.",
+  "presence": {
+    "browser_found": {
+      "one": "{count} browser profile found",
+      "other": "{count} browser profiles found"
+    },
+    "prefetch_found": {
+      "one": "{count} .pf file found",
+      "other": "{count} .pf files found"
+    },
+    "recyclebin_found": {
+      "one": "{count} item found",
+      "other": "{count} items found"
+    }
+  },
   "preview.preview_title": "Nothing selected",
   "preview_entry.reading": "Reading…",
   "progs_installed_programs": "{progs} installed programs",
