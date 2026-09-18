@@ -32,6 +32,11 @@ records, not how the code changed.
   seconds per attempt, and a progress bar shows the work.
 
 ### Fixed
+- **A ShimCache entry proves a file was examined, not that it ran — but
+  nothing said so next to the results.** The distinction was stated only in
+  a help string shown before collection ran. It's now a standing note on
+  the results themselves whenever any ShimCache entries are found
+  ([#63](https://github.com/switch-nz/strata/issues/63)).
 - Opening a tagged, deleted, contiguous exFAT file from the Tags panel (not
   exporting it — viewing it) could show the wrong content, for the same
   reason #94 fixed for export: the entry built for the hex view carried
