@@ -596,6 +596,10 @@ select:focus, input:focus, textarea:focus { border-color: var(--dim); }
             color: var(--text); max-height: 320px; overflow-y: auto; }
 .mail-attachments { margin-top: 8px; font-size: 11px; color: var(--dimmer); }
 .mail-att { padding: 2px 0; }
+.mail-att-preview { margin: 4px 0 6px; border: 1px solid var(--line); }
+.mail-att-preview .pv-image { height: 180px; }
+.mail-att-preview .pv-text { max-height: 180px; overflow-y: auto; font-size: 11px; }
+.mail-att-preview .pv-note { padding: 6px 8px; font-size: 11px; }
 
 .empty { color: var(--dimmer); padding: 18px 14px; font-size: 12px;
          line-height: 1.6; }

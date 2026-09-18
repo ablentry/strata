@@ -13,6 +13,14 @@ records, not how the code changed.
 
 ### Added
 
+- **A PST attachment's content can now be viewed, not only its name and
+  size.** The mail viewer listed every attachment's filename and size but
+  had no way to read what was inside one. Clicking an attachment now
+  fetches and decodes it on demand — shown inline for an image, as text
+  for anything readable, or noted as binary of a given size and type
+  otherwise — without decoding every attachment in every message up front
+  ([#61](https://github.com/switch-nz/strata/issues/61), attachment
+  content only; ANSI PST files and OST-specific structures remain open).
 - **Hash-set matches now show in the folder and search views, not only in
   the hash run.** A file already hashed (in this or an earlier run) whose
   digest is in an imported hash set is flagged directly where it is found —

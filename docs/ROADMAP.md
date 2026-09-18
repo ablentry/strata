@@ -83,8 +83,8 @@ recognised and refused by name today; these entries are about *reading* it.
 - [ ] **Browser disk cache** — the on-disk cache format, separate from the
       history databases already read.
 - [ ] **Event ID descriptions**, and timelining across logs.
-- [ ] **PST:** ANSI (32-bit) files are refused today; attachment *content*
-      (only names and sizes are read); OST-specific structures.
+- [ ] **PST:** ANSI (32-bit) files are refused today; OST-specific
+      structures are not handled.
 - [ ] **Legacy Office body text** — Word's piece table, Excel's BIFF stream,
       PowerPoint's records. Properties are read; the body is deliberately left
       unread rather than guessed at.
