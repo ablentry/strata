@@ -6394,6 +6394,57 @@ function renderShellbags(r, part) {
   tabCount('triage', all.length);
 }
 
+function mailAddr(v) {
+  // mbox gives a list of addresses; PST gives one already-formatted
+  // display string (or nothing). Normalised to a single string either way.
+  if (!v) return '';
+  return Array.isArray(v) ? v.join(', ') : String(v);
+}
+
+function mailBody(m) {
+  // What to show for a message's content, in the order this codebase's own
+  // rule prefers: decoded plain text, then visible text lifted out of an
+  // HTML-only part (never the markup itself, never rendered as HTML), then
+  // an honest note that there is nothing readable to show.
+  const LIMIT = 20000;
+  const cut = s => s.length > LIMIT
+    ? s.slice(0, LIMIT) + '\n\n[truncated]' : s;
+  if (m.text) return { kind: 'text', text: cut(m.text) };
+  if (m.body) return { kind: 'text', text: cut(m.body) };       // PST
+  if (m.html_text) return { kind: 'html_text', text: cut(m.html_text) };
+  if (m.html_bytes) return { kind: 'html_only', text: null };
+  if (m.unparsed) return { kind: 'unparsed', text: null };
+  return { kind: 'none', text: null };
+}
+
+function mailDetailHtml(m) {
+  const rows = [
+    ['From', mailAddr(m.from)], ['To', mailAddr(m.to)],
+    ['Cc', mailAddr(m.cc)], ['Date', m.date_raw || m.date],
+  ].filter(([, v]) => v);
+  const body = mailBody(m);
+  const bodyHtml = {
+    text: `<pre class="mail-body">${escText(body.text)}</pre>`,
+    html_text: `<div class="notice">This message has no plain-text part; ` +
+      `tags have been stripped from its HTML part to show the text ` +
+      `below, which is not rendered as HTML.</div>` +
+      `<pre class="mail-body">${escText(body.text)}</pre>`,
+    html_only: `<p class="empty">HTML-only message; no readable text ` +
+      `could be lifted out of it.</p>`,
+    unparsed: `<p class="empty">This message could not be parsed.</p>`,
+    none: `<p class="empty">No body text recorded for this message.</p>`,
+  }[body.kind];
+  const atts = (m.attachments || []).map(a => `<div class="mail-att">${
+    esc(a.filename || '(unnamed)')}${a.content_type ? ' · ' + esc(a.content_type) : ''
+    }${a.bytes ? ' · ' + fmt.bytes(a.bytes) : ''}</div>`).join('');
+  return `<div class="mail-detail">
+    <div class="mail-headers">${rows.map(([k, v]) =>
+      `<div><strong>${k}:</strong> ${esc(v)}</div>`).join('')}</div>
+    ${bodyHtml}
+    ${atts ? `<div class="mail-attachments">${atts}</div>` : ''}
+  </div>`;
+}
+
 function renderMail(r, part) {
   const box = $('#art-results');
   const msgs = r.messages || [];
@@ -6422,11 +6473,18 @@ function renderMail(r, part) {
           <span class="off">${fmt.bytes(m.bytes)}</span>
         </div>
         <div class="name">${esc(m.subject || '(no subject)')}</div>
-        <div class="path">${esc((m.from || []).join(', '))} →
-          ${esc((m.to || []).join(', ').slice(0, 80))}</div>
+        <div class="path">${esc(mailAddr(m.from))} →
+          ${esc(mailAddr(m.to).slice(0, 80))}</div>
         <div class="meta">${esc(m.date || m.date_raw || 'no date')}${
           m.store ? ' · ' + esc(m.store.split('/').pop()) : ''}</div>
       </div>`).join('');
+  bindResults(box, (el, ev) => {
+    if (ev.target.closest('.mail-detail')) return;
+    const open = el.querySelector('.mail-detail');
+    if (open) { open.remove(); return; }
+    $$('.mail-detail', box).forEach(n => n.remove());
+    el.insertAdjacentHTML('beforeend', mailDetailHtml(msgs[+el.dataset.i]));
+  });
   tabCount('triage', msgs.length);
 }
 
@@ -6473,10 +6531,10 @@ const escText = s => (s === null || s === undefined ? '' : String(s))
 
 function bindResults(box, fn, menuFor = null) {
   $$('.result', box).forEach(el => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', ev => {
       $$('.result.is-on', box).forEach(n => n.classList.remove('is-on'));
       el.classList.add('is-on');
-      fn(el);
+      fn(el, ev);
     });
     if (!menuFor) return;
     el.addEventListener('contextmenu', ev => {
