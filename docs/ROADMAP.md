@@ -56,9 +56,6 @@ recognised and refused by name today; these entries are about *reading* it.
       and hard links through the private metadata directory.
 - [ ] **APFS snapshots** — the superblock's snapshot metadata is located but
       snapshots are not listed or read.
-- [ ] **ext4 extended attributes** — only the in-inode `system.data`
-      attribute that holds inline data is read; the rest (in-inode and
-      external xattr blocks) are not shown.
 
 ### Encryption
 

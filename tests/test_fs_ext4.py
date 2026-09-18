@@ -475,6 +475,22 @@ class ExtendedAttributes(unittest.TestCase):
         self.assertEqual(ino.inline_xattr(),
                          build.CONTENT["inline_long.txt"][60:])
 
+    def test_stat_reports_xattrs_json_safely(self):
+        # stat() feeds /api/stat directly; a raw bytes value would fail
+        # to serialise cleanly to JSON (json.dumps's default=str fallback
+        # would show a literal "b'...'" repr instead of the value).
+        import base64
+        entry = {"inode": build.INO_XATTR_INLINE}
+        info = self.fs.stat(entry)
+        attrs = {a["name"]: a for a in info["xattrs"]}
+        self.assertEqual(base64.b64decode(attrs["user.comment"]["value"]),
+                         b"hello world")
+        self.assertEqual(attrs["user.comment"]["size"], len(b"hello world"))
+
+    def test_stat_omits_xattrs_entirely_when_there_are_none(self):
+        info = self.fs.stat({"inode": 2})
+        self.assertNotIn("xattrs", info)
+
 
 if __name__ == "__main__":
     unittest.main()

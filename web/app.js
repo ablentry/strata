@@ -1911,6 +1911,22 @@ async function showEntry(e, part, from = null, stream = null) {
       directory listing and are not counted in the file's size. Select one to
       read it.</p>` : ''}`;
 
+  const xattrList = st.xattrs || [];
+  const xattrs = !xattrList.length ? '' : `<h3>${txt('ui.extended_attributes')}</h3>
+    ${xattrList.map(a => {
+      const bytes = Uint8Array.from(atob(a.value || ''), c => c.charCodeAt(0));
+      const preview = looksTextual(bytes)
+        ? esc(decodeText(bytes).slice(0, 200))
+        : Array.from(bytes.slice(0, 32))
+            .map(b => b.toString(16).padStart(2, '0')).join(' ')
+          + (bytes.length > 32 ? '…' : '');
+      return `<div class="runbar">
+          <span>${esc(a.name)}${a.truncated ? ' · truncated' : ''}</span>
+          <span class="len">${fmt.bytes(a.size)}</span>
+        </div>
+        <div class="hint mono">${preview}</div>`;
+    }).join('')}`;
+
   const ent = st.entropy && st.entropy.entropy !== null ? `<h3>${txt('ui.show_entry.entropy')}</h3>
     ${kv([
       [txt('ui.kv.bits_per_byte'), `${st.entropy.entropy.toFixed(3)} / 8`, true],
@@ -2007,6 +2023,7 @@ async function showEntry(e, part, from = null, stream = null) {
       e.mft_modified && [txt('ui.kv.mft_changed'), fmt.time(e.mft_modified)],
     ])}
     ${streams}
+    ${xattrs}
     ${exifBlock}
     ${ent}
     ${hashBlock}

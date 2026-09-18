@@ -1,5 +1,6 @@
 from .streams import UnsupportedStream
 from .ranges import read_runs
+import base64
 import datetime
 import struct
 
@@ -529,6 +530,13 @@ class Ext4FS:
                        else ("inline" if ino.inline else "indirect blocks"),
             "flags": "0x%08X" % ino.flags,
         }
+        xattrs = ino.xattrs()
+        if xattrs:
+            info["xattrs"] = [
+                {"name": a["name"], "size": a["size"],
+                 "truncated": a["truncated"],
+                 "value": base64.b64encode(a["value"]).decode("ascii")}
+                for a in xattrs]
         if ino.inline:
             info["note"] = ("Content is stored inside the inode itself. No "
                             "blocks are allocated, so there is nothing to "
