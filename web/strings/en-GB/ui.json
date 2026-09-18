@@ -595,6 +595,7 @@
   "render_registry.data": "Data",
   "render_registry.deleted": "Deleted",
   "render_registry.name": "Name",
+  "render_registry.loading_value": "Loading…",
   "render_registry.no_subkeys": "No subkeys.",
   "render_registry.type": "Type",
   "render_sqlite.no_tables": "No tables.",

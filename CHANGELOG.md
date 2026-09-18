@@ -13,6 +13,11 @@ records, not how the code changed.
 
 ### Added
 
+- **A registry value over 2 KB can now be fetched in full.** It was shown
+  in the interface as its size only, with nothing behind it — the parser
+  reads the full value already, the interface just had no way to ask for
+  it. A "load" affordance on such a value now fetches and decodes it in
+  full ([#79](https://github.com/switch-nz/strata/issues/79)).
 - **Split raw sets** (`.001`, `.002`, …, or numbered from `.000`) are opened
   as one disk. Previously opening the first piece read that piece alone, with
   nothing to say the rest of the disk was missing. The set is joined whichever
