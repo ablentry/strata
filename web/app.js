@@ -9084,6 +9084,7 @@ $('#btn-tag-export').addEventListener('click', async () => {
       const r = await api.post('export/file', { part: t.part, node: t.node,
                                                 name: t.name, path: t.path,
                                                 size: t.size, deleted: !!t.deleted,
+                                                contiguous: !!t.contiguous,
                                                 modified: t.modified,
                                                 accessed: t.accessed,
                                                 created: t.file_created });

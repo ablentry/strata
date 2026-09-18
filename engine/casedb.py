@@ -67,7 +67,9 @@ CREATE TABLE IF NOT EXISTS bookmarks (
 -- from a bookmark. It is identified by the filesystem's own handle (MFT
 -- record, inode, object id, start cluster) so it survives reopening the case,
 -- and it carries a copy of the metadata so a report can be written without
--- re-reading the evidence.
+-- re-reading the evidence. `contiguous` is exFAT-specific: a NoFatChain
+-- stream is read by extent rather than by walking the FAT, and getting that
+-- wrong on a deleted item silently returns the wrong content (#94).
 CREATE TABLE IF NOT EXISTS tagged_items (
     id INTEGER PRIMARY KEY,
     evidence_id INTEGER NOT NULL,
@@ -85,6 +87,7 @@ CREATE TABLE IF NOT EXISTS tagged_items (
     modified TEXT,
     accessed TEXT,
     file_created TEXT,
+    contiguous INTEGER,
     UNIQUE (evidence_id, part, node, tag));
 
 CREATE TABLE IF NOT EXISTS audit (
@@ -412,6 +415,7 @@ class Case:
         self._migrate_file_hashes()
         self._migrate_bookmark_frame()
         self._migrate_evidence_kind()
+        self._migrate_tagged_items()
         self.index_reset = False
         self.index_db = None
         self.index_pending = 0
@@ -455,6 +459,13 @@ class Case:
                             (infer_kind(row["path"], row["format"]),
                              row["id"]))
         self.db.commit()
+
+    def _migrate_tagged_items(self):
+        cols = {r[1] for r in self.db.execute("PRAGMA table_info(tagged_items)")}
+        if "contiguous" not in cols:
+            self.db.execute(
+                "ALTER TABLE tagged_items ADD COLUMN contiguous INTEGER")
+            self.db.commit()
 
     def _migrate_bookmarks(self):
         cols = {r[1] for r in self.db.execute("PRAGMA table_info(bookmarks)")}
@@ -894,12 +905,14 @@ class Case:
         cur = self.db.execute(
             "INSERT INTO tagged_items (evidence_id,part,node,path,name,size,"
             "is_dir,deleted,tag,note,created_at,examiner,modified,accessed,"
-            "file_created) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+            "file_created,contiguous) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT(evidence_id,part,node,tag) DO UPDATE SET note=excluded.note",
             (evidence_id, part, node, item.get("path"), item.get("name"),
              item.get("size"), int(bool(item.get("is_dir"))),
              int(bool(item.get("deleted"))), tag, note, utcnow(), self.examiner,
-             item.get("modified"), item.get("accessed"), item.get("created")))
+             item.get("modified"), item.get("accessed"), item.get("created"),
+             int(bool(item.get("contiguous")))
+             if item.get("contiguous") is not None else None))
         self.db.commit()
         self.log("item.tag", {"path": item.get("path"), "name": item.get("name"),
                               "tag": tag, "node": node})
