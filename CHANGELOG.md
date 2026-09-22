@@ -13,6 +13,18 @@ records, not how the code changed.
 
 ### Added
 
+- **A `--read-only` startup flag refuses export and report writing for the
+  whole session.** With it set, every export route (single file, a whole
+  folder, a raw byte range, the export manifest) and writing the HTML
+  examination report are refused server-side with a clear error, whether
+  the request comes from the interface or straight at the API — a denied
+  attempt is recorded in the case's audit log the same as any other
+  action. The matching interface controls (Export, Export and add,
+  Export bytes, the Report button, the tagged-items export button) are
+  hidden or disabled rather than left to fail silently. Nothing else
+  changes: opening evidence, examining it, and writing to the case
+  itself (tags, bookmarks, notes) are unaffected, and the flag defaults
+  off ([#70](https://github.com/switch-nz/strata/issues/70)).
 - **Re-running an artefact collector now asks first if it already has a
   result for that evidence item.** `save_artefact` replaces the earlier
   row silently, which is fine on a first pass and wrong once an examiner
