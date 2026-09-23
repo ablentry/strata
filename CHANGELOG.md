@@ -13,6 +13,15 @@ records, not how the code changed.
 
 ### Added
 
+- **A fixed VHD (Virtual PC / Hyper-V, the Conectix footer format) now opens
+  directly.** Its 512-byte footer is read from the end of the file and
+  excluded from the exposed disk, so what is shown, hashed and carved is the
+  virtual disk only, not the footer appended after it. A dynamic or
+  differencing VHD is recognised from the same footer and refused by name,
+  as before; a footer that fails its own checksum, or names a disk type
+  this reader does not know, is refused rather than guessed at
+  ([#46](https://github.com/switch-nz/strata/issues/46), fixed VHD only —
+  dynamic and differencing VHD, and VHDX, remain out of scope here).
 - **Extended attributes on APFS and HFS+ files are now decoded, not just
   listed.** APFS already walked a file's extended attributes but discarded
   their value, and HFS+ located the Attributes fork without ever opening
